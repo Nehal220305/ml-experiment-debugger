@@ -126,11 +126,18 @@ Evaluated using `gpt-4o-mini` with zero-shot prompting:
 | hard | 0.30 |
 | **avg** | **0.67** |
 
-## Pre-Submission Checklist
+## Why This Environment Matters
 
-- [x] HF Space deploys and returns 200
-- [x] openenv validate passes
-- [x] Dockerfile builds and runs
-- [x] Baseline script reproduces scores
-- [x] 3+ tasks with graders (0.0–1.0)
-- [x] /baseline, /grader, /tasks endpoints exposed
+Debugging broken ML experiments is a task every ML engineer faces daily.
+No existing OpenEnv environment covers this domain. This environment enables:
+
+- Training RL agents to diagnose ML failures automatically
+- Evaluating LLMs on realistic engineering debugging tasks
+- Benchmarking agent performance across easy/medium/hard difficulty
+
+## Environment Details
+
+- **Framework:** OpenEnv + FastAPI + Docker
+- **Grader:** Executes real sklearn training loops — scores are objective, not heuristic
+- **Reproducible:** Fixed random seed (42) ensures identical results every run
+- **Live Space:** https://huggingface.co/spaces/Nehal-2203/ml-experiment-debugger
