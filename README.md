@@ -20,8 +20,10 @@ An OpenEnv environment where an AI agent debugs broken ML training experiments.
 The agent receives a faulty training configuration and log, identifies the bug,
 and proposes a fix. Designed for RL training and agent evaluation.
 
-Visit the live interactive API docs at:
-https://Nehal-2203-ml-experiment-debugger.hf.space/docs
+> No existing OpenEnv environment covers ML experiment debugging.
+> This fills a direct gap in the RL agent evaluation ecosystem.
+
+**Live API Docs:** https://Nehal-2203-ml-experiment-debugger.hf.space/docs
 
 ## What is this?
 
