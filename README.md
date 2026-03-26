@@ -112,6 +112,9 @@ python baseline.py --host http://localhost:7860
 | `/tasks` | GET | Lists all tasks and action schema |
 | `/docs` | GET | Interactive API documentation |
 
+Visit the live interactive API docs at:
+https://Nehal-2203-ml-experiment-debugger.hf.space/docs
+
 ## Baseline Scores
 
 Evaluated using `gpt-4o-mini` with zero-shot prompting:
