@@ -122,14 +122,14 @@ python baseline.py --host http://localhost:7860
 
 ## Baseline Scores
 
-Evaluated using `gpt-4o-mini` with zero-shot prompting:
+Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 
 | Task | Score |
 |------|-------|
 | easy | 1.00 |
-| medium | 0.70 |
-| hard | 0.30 |
-| **avg** | **0.67** |
+| medium | 1.00 |
+| hard | 1.00 |
+| **avg** | **1.00** |
 
 ## Why This Environment Matters
 

@@ -1,6 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
 """
 Client for the ML Experiment Debugger Environment.
 Translates between typed models and the WebSocket wire format.

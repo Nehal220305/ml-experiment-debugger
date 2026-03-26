@@ -1,6 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
 """
 Data models for the ML Experiment Debugger Environment.
 An agent receives a broken ML training config and must diagnose and fix it.
@@ -35,7 +32,6 @@ class MLAction(Action):
 class MLObservation(Observation):
     """What the environment sends back to the agent after each action."""
 
-    # done and reward are already in Observation base class
     task_id: str = Field(
         default="easy",
         description="Active task: 'easy', 'medium', or 'hard'"
@@ -61,7 +57,6 @@ class MLObservation(Observation):
 class MLState(State):
     """Internal episode state — not sent to agent directly."""
 
-    # episode_id and step_count already in State base class
     task_id: str = Field(default="easy", description="Current task")
     current_bug: str = Field(default="", description="The actual bug injected")
     attempts: int = Field(default=0, description="Number of fix attempts")

@@ -1,21 +1,74 @@
 import sys
 import os
+import uuid
 
 sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/server")
 
-from openenv.core.env_server import create_fastapi_app
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment
-from models import MLAction, MLObservation
+from models import MLAction
 
-app = create_fastapi_app(
-    MlExperimentDebuggerEnvironment,
-    action_cls=MLAction,
-    observation_cls=MLObservation,
+app = FastAPI(
+    title="ML Experiment Debugger",
+    description="OpenEnv environment for debugging broken ML training experiments.",
 )
 
+env = MlExperimentDebuggerEnvironment()
 
-# ── Additional required endpoints ─────────────────────────────────────────────
+
+class ResetRequest(BaseModel):
+    task_id: Optional[str] = "easy"
+    seed: Optional[int] = None
+    episode_id: Optional[str] = None
+
+
+class StepRequest(BaseModel):
+    action: MLAction
+
+
+@app.post("/reset")
+def reset(request: ResetRequest):
+    obs = env.reset(
+        task_id=request.task_id,
+        seed=request.seed,
+        episode_id=request.episode_id,
+    )
+    return {
+        "observation": obs.model_dump(),
+        "reward": obs.reward,
+        "done": obs.done,
+    }
+
+
+@app.post("/step")
+def step(request: StepRequest):
+    obs = env.step(request.action)
+    return {
+        "observation": obs.model_dump(),
+        "reward": obs.reward,
+        "done": obs.done,
+    }
+
+
+@app.get("/state")
+def state():
+    return env.state.model_dump()
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
+@app.get("/schema")
+def schema():
+    return {
+        "action": MLAction.model_json_schema(),
+    }
+
 
 @app.get("/tasks")
 def get_tasks():
@@ -32,7 +85,7 @@ def get_tasks():
                     "bug_identified": "learning_rate_too_high",
                     "config_changes": {"learning_rate": 0.01},
                     "explanation": "string (optional)",
-                }
+                },
             },
             {
                 "id": "medium",
@@ -45,7 +98,7 @@ def get_tasks():
                     "bug_identified": "data_leakage",
                     "config_changes": {"fix_train_val_split": True},
                     "explanation": "string (optional)",
-                }
+                },
             },
             {
                 "id": "hard",
@@ -58,7 +111,7 @@ def get_tasks():
                     "bug_identified": "label_noise",
                     "config_changes": {"label_noise_pct": 0.0},
                     "explanation": "string (optional)",
-                }
+                },
             },
         ]
     }
@@ -84,12 +137,12 @@ def get_baseline():
     return {
         "baseline_scores": {
             "easy": 1.00,
-            "medium": 0.70,
-            "hard": 0.30,
-            "average": 0.67,
+            "medium": 1.00,
+            "hard": 0.65,
+            "average": 0.88,
         },
-        "model": "gpt-4o-mini",
-        "description": "Run baseline.py with OPENAI_API_KEY to reproduce these scores.",
+        "model": "llama-3.3-70b-versatile (Groq)",
+        "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",
     }
 
 

@@ -1,6 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
 """
 ML Experiment Debugger Environment.
 Agent receives a broken ML training config and must diagnose and fix it.
@@ -70,14 +67,12 @@ def run_training(config: dict, task_id: str) -> tuple:
     np.random.seed(42)
     X, y = make_classification(n_samples=300, n_features=10, random_state=42)
 
-    # Inject label noise if configured
     noise_pct = config.get("label_noise_pct", 0.0)
     if noise_pct > 0:
         n_noisy = int(len(y) * noise_pct)
         noisy_idx = np.random.choice(len(y), n_noisy, replace=False)
         y[noisy_idx] = 1 - y[noisy_idx]
 
-    # Split — leaky (same data) or clean
     if config.get("fix_train_val_split", False):
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=0.2, random_state=42
@@ -90,7 +85,6 @@ def run_training(config: dict, task_id: str) -> tuple:
     max_iter = config.get("max_iter", 20)
     penalty = config.get("penalty", "l2")
 
-    # Detect clearly broken learning rate before even training
     if lr > 10.0:
         log = []
         log.append(f"step 1: loss=2.847")
@@ -128,8 +122,12 @@ def run_training(config: dict, task_id: str) -> tuple:
 
     val_preds = clf.predict(X_val)
     val_acc = accuracy_score(y_val, val_preds)
-    log.append(f"final val_acc={val_acc:.3f}")
-    return log, float(val_acc)
+    if noise_pct > 0.1:
+        log.append(f"reported_metric: train_acc={train_acc:.3f} (model appears healthy)")
+        log.append(f"final val_acc={val_acc:.3f} (WARNING: suspiciously low — check label quality)")
+    else:
+        log.append(f"final val_acc={val_acc:.3f}")
+    return log, float(val_acc)  
 
 
 # ── Graders ───────────────────────────────────────────────────────────────────
@@ -159,17 +157,15 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool) -> float
             partial += 0.3
 
     elif task_id == "medium":
-        if base_config.get("fix_train_val_split", False) and score < 0.95:
+        if base_config.get("fix_train_val_split", False):
             partial += 0.7
-        elif base_config.get("fix_train_val_split", False):
-            partial += 0.3
 
     elif task_id == "hard":
         noise_fixed = base_config.get("label_noise_pct", 0.30) < 0.05
-        split_fixed = base_config.get("fix_train_val_split", False)
+        split_fixed = base_config.get("fix_train_val_split", True)
         if noise_fixed and split_fixed:
             partial += 0.7
-        elif noise_fixed or split_fixed:
+        elif noise_fixed:
             partial += 0.35
 
     return min(round(partial, 2), 1.0)
@@ -251,6 +247,9 @@ class MlExperimentDebuggerEnvironment(Environment):
                 )
 
         elif action.action_type in ("fix_config", "submit_fix"):
+            if action.bug_identified == task["bug"]:
+                self._bug_identified = True
+
             score = grade_fix(
                 self._task_id,
                 action.config_changes or {},
