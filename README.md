@@ -10,6 +10,8 @@ tags:
   - reinforcement-learning
   - machine-learning
   - debugging
+  - ml-debugging
+  - rl-environment
 ---
 
 # ML Experiment Debugger Environment
@@ -17,6 +19,9 @@ tags:
 An OpenEnv environment where an AI agent debugs broken ML training experiments.
 The agent receives a faulty training configuration and log, identifies the bug,
 and proposes a fix. Designed for RL training and agent evaluation.
+
+Visit the live interactive API docs at:
+https://Nehal-2203-ml-experiment-debugger.hf.space/docs
 
 ## What is this?
 
@@ -112,8 +117,6 @@ python baseline.py --host http://localhost:7860
 | `/tasks` | GET | Lists all tasks and action schema |
 | `/docs` | GET | Interactive API documentation |
 
-Visit the live interactive API docs at:
-https://Nehal-2203-ml-experiment-debugger.hf.space/docs
 
 ## Baseline Scores
 
