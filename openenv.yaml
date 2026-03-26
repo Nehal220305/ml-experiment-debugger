@@ -1,0 +1,97 @@
+name: ml_experiment_debugger
+version: "1.0.0"
+description: >
+  An RL environment where an AI agent debugs broken ML training experiments.
+  The agent receives a faulty training config and log, identifies the bug,
+  and proposes a fix. Three tasks of increasing difficulty: exploding loss,
+  data leakage, and silent label noise.
+
+author: "Raman Asolekar, Nehal Gupta"
+license: "BSD-3-Clause"
+tags:
+  - machine-learning
+  - debugging
+  - reinforcement-learning
+  - openenv
+
+tasks:
+  - id: easy
+    name: "Exploding Loss"
+    description: "Learning rate is too high — loss goes to NaN immediately."
+    difficulty: easy
+
+  - id: medium
+    name: "Data Leakage"
+    description: "Validation set is same as training set — accuracy is misleadingly perfect."
+    difficulty: medium
+
+  - id: hard
+    name: "Silent Label Noise"
+    description: "30% of labels are flipped — model trains fine but fails on real data."
+    difficulty: hard
+
+action_space:
+  type: object
+  fields:
+    action_type:
+      type: string
+      description: "One of: identify_bug, fix_config, submit_fix"
+    bug_identified:
+      type: string
+      description: "Name of the bug identified"
+      optional: true
+    config_changes:
+      type: object
+      description: "Key-value config fixes to apply"
+      optional: true
+    explanation:
+      type: string
+      description: "Agent's reasoning for partial credit"
+      optional: true
+
+observation_space:
+  type: object
+  fields:
+    task_id:
+      type: string
+      description: "Active task: easy, medium, or hard"
+    training_log:
+      type: array
+      description: "Step-by-step training output showing the broken behavior"
+    current_config:
+      type: object
+      description: "The broken config the agent must fix"
+    hint:
+      type: string
+      description: "Optional hint shown after wrong attempts"
+      optional: true
+    message:
+      type: string
+      description: "Feedback after each action"
+    reward:
+      type: float
+      description: "Partial credit score 0.0-1.0"
+      optional: true
+    done:
+      type: boolean
+      description: "True when episode is complete"
+
+reward:
+  min: 0.0
+  max: 1.0
+  description: >
+    +0.3 for correctly identifying the bug type.
+    +0.7 for a fix that makes training converge successfully.
+    Partial credit given at each step — not just at episode end.
+
+server:
+  port: 7860
+  framework: fastapi
+  endpoints:
+    - /reset
+    - /step
+    - /state
+    - /health
+    - /baseline
+    - /grader
+    - /tasks

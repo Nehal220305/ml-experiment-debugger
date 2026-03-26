@@ -1,0 +1,7 @@
+openenv-core
+fastapi
+uvicorn
+scikit-learn
+numpy
+pydantic
+openai
