@@ -23,6 +23,8 @@ class ResetRequest(BaseModel):
     task_id: Optional[str] = "easy"
     seed: Optional[int] = None
     episode_id: Optional[str] = None
+    
+    model_config = {"extra": "allow"}
 
 
 class StepRequest(BaseModel):
@@ -30,9 +32,11 @@ class StepRequest(BaseModel):
 
 
 @app.post("/reset")
-def reset(request: ResetRequest):
+def reset(request: ResetRequest = None):
+    if request is None:
+        request = ResetRequest()
     obs = env.reset(
-        task_id=request.task_id,
+        task_id=request.task_id or "easy",
         seed=request.seed,
         episode_id=request.episode_id,
     )
