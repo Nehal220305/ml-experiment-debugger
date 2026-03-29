@@ -6,7 +6,7 @@ sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/server")
 
 from fastapi import FastAPI
-from fastapi import Request
+from fastapi import Request, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment
@@ -33,20 +33,25 @@ class StepRequest(BaseModel):
 
 
 @app.post("/reset")
-async def reset(request: Request):
+async def reset(
+    request: Request,
+    task_id: Optional[str] = Query(default=None),
+    seed: Optional[int] = Query(default=None),
+    episode_id: Optional[str] = Query(default=None),
+):
     try:
         body = await request.json()
     except:
         body = {}
     
-    task_id = body.get("task_id", "easy") if body else "easy"
-    seed = body.get("seed", None) if body else None
-    episode_id = body.get("episode_id", None) if body else None
+    final_task_id = task_id or (body.get("task_id") if body else None) or "easy"
+    final_seed = seed or (body.get("seed") if body else None)
+    final_episode_id = episode_id or (body.get("episode_id") if body else None)
     
     obs = env.reset(
-        task_id=task_id,
-        seed=seed,
-        episode_id=episode_id,
+        task_id=final_task_id,
+        seed=final_seed,
+        episode_id=final_episode_id,
     )
     return {
         "observation": obs.model_dump(),
