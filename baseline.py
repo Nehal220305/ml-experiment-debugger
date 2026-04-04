@@ -151,7 +151,7 @@ def main():
     print(f"Model: llama-3.3-70b-versatile (Groq)")
 
     scores = {}
-    for task_id in ["easy", "medium", "hard"]:
+    for task_id in ["easy", "medium", "hard", "very_hard"]:
         try:
             score = run_task(task_id)
             scores[task_id] = score

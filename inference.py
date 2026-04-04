@@ -12,9 +12,9 @@ import argparse
 import requests
 from openai import OpenAI
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("GROQ_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 
 parser = argparse.ArgumentParser(description="ML Experiment Debugger inference")
 parser.add_argument("--host", type=str, default="http://localhost:7860")
@@ -46,6 +46,7 @@ Available bugs — use EXACTLY these strings:
 - learning_rate_too_high
 - data_leakage
 - label_noise
+- wrong_loss_function
 
 Respond with a valid JSON object only:
 {
@@ -114,7 +115,7 @@ def main():
     print(f"Model: {MODEL_NAME}")
 
     scores = {}
-    for task_id in ["easy", "medium", "hard"]:
+    for task_id in ["easy", "medium", "hard", "very_hard"]:
         try:
             scores[task_id] = run_task(task_id)
         except Exception as e:

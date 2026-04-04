@@ -129,6 +129,19 @@ def get_tasks():
                     "explanation": "string (optional)",
                 },
             },
+            {
+                "id": "very_hard",
+                "name": "Wrong Loss Function",
+                "difficulty": "very_hard",
+                "description": "Model uses regression loss for classification — accuracy plateaus near random.",
+                "bug": "wrong_loss_function",
+                "action_schema": {
+                    "action_type": "submit_fix",
+                    "bug_identified": "wrong_loss_function",
+                    "config_changes": {"loss": "log_loss"},
+                    "explanation": "string (optional)",
+                },
+            },
         ]
     }
 
@@ -154,8 +167,9 @@ def get_baseline():
         "baseline_scores": {
             "easy": 1.00,
             "medium": 1.00,
-            "hard": 1.00,
-            "average": 1.00,
+            "hard": 0.35,
+            "very_hard": 0.00,
+            "average": 0.59,
         },
         "model": "llama-3.3-70b-versatile (Groq)",
         "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",

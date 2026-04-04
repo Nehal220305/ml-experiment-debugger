@@ -17,7 +17,7 @@ class MLAction(Action):
     )
     bug_identified: Optional[str] = Field(
         default=None,
-        description="Bug name e.g. 'learning_rate_too_high', 'data_leakage', 'label_noise'"
+        description="Bug name e.g. 'learning_rate_too_high', 'data_leakage', 'label_noise', 'wrong_loss_function'"
     )
     config_changes: Optional[Dict[str, Any]] = Field(
         default=None,

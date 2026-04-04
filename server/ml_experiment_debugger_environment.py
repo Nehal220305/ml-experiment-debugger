@@ -1,7 +1,7 @@
 """
 ML Experiment Debugger Environment.
 Agent receives a broken ML training config and must diagnose and fix it.
-3 tasks: easy (exploding loss), medium (data leakage), hard (label noise).
+4 tasks: easy (exploding loss), medium (data leakage), hard (label noise), very_hard (wrong loss function).
 """
 
 import uuid
@@ -14,8 +14,6 @@ from typing import Optional
 from openenv.core.env_server import Environment
 from models import MLAction, MLObservation, MLState
 
-
-# ── Task definitions ──────────────────────────────────────────────────────────
 
 TASKS = {
     "easy": {
@@ -44,26 +42,33 @@ TASKS = {
     },
     "hard": {
         "bug": "label_noise",
-        "description": "Model trains without errors, loss looks okay, but real-world performance is poor. Reported metric may be misleading.",
+        "description": "Model trains without errors. Loss looks stable. But real-world performance is catastrophically poor. Two things are wrong — find both.",
         "broken_config": {
-            "learning_rate": 0.01,
+            "learning_rate": 0.0001,
             "max_iter": 20,
             "penalty": "l2",
             "fix_train_val_split": True,
             "label_noise_pct": 0.30,
         },
-        "hint": "Is the data itself trustworthy? Check label quality and which metric is being reported.",
+        "hint": "Is the data itself trustworthy? Is the learning rate optimal?",
+    },
+    "very_hard": {
+        "bug": "wrong_loss_function",
+        "description": "Model trains for 20 steps but accuracy plateaus near 52%. Loss decreases steadily but classification performance is near random. Data and architecture are correct.",
+        "broken_config": {
+            "learning_rate": 0.01,
+            "max_iter": 20,
+            "penalty": "l2",
+            "fix_train_val_split": True,
+            "label_noise_pct": 0.0,
+            "loss": "squared_error",
+        },
+        "hint": "Is the loss function appropriate for a binary classification task?",
     },
 }
 
 
-# ── Training simulator ────────────────────────────────────────────────────────
-
 def run_training(config: dict, task_id: str) -> tuple:
-    """
-    Runs a tiny training loop with the given config.
-    Returns (training_log, final_score).
-    """
     np.random.seed(42)
     X, y = make_classification(n_samples=300, n_features=10, random_state=42)
 
@@ -84,19 +89,20 @@ def run_training(config: dict, task_id: str) -> tuple:
     lr = config.get("learning_rate", 0.01)
     max_iter = config.get("max_iter", 20)
     penalty = config.get("penalty", "l2")
+    loss_fn = config.get("loss", "log_loss")
 
     if lr > 10.0:
         log = []
-        log.append(f"step 1: loss=2.847")
-        log.append(f"step 2: loss=941.23 (unstable)")
-        log.append(f"step 3: loss=nan (weights exploded — learning rate {lr} is too high)")
+        log.append("step 1: loss=2.847")
+        log.append("step 2: loss=941.23 (unstable)")
+        log.append("step 3: loss=nan")
         for i in range(4, max_iter + 1):
             log.append(f"step {i}: loss=nan")
         return log, 0.0
 
     log = []
     clf = SGDClassifier(
-        loss="log_loss",
+        loss=loss_fn,
         learning_rate="constant",
         eta0=lr,
         penalty=penalty,
@@ -105,6 +111,7 @@ def run_training(config: dict, task_id: str) -> tuple:
         random_state=42,
     )
 
+    train_acc = 0.5
     for step in range(1, max_iter + 1):
         try:
             clf.fit(X_train, y_train)
@@ -115,28 +122,32 @@ def run_training(config: dict, task_id: str) -> tuple:
                 log.append(f"step {step}: loss=nan (weights exploded)")
                 return log, 0.0
 
-            log.append(f"step {step}: train_acc={train_acc:.3f}")
+            if loss_fn == "squared_error":
+                fake_loss = max(0.05, 0.45 - step * 0.018)
+                log.append(f"step {step}: loss={fake_loss:.3f} (decreasing)")
+            else:
+                log.append(f"step {step}: train_acc={train_acc:.3f}")
         except Exception as e:
             log.append(f"step {step}: ERROR — {str(e)}")
             return log, 0.0
 
     val_preds = clf.predict(X_val)
     val_acc = accuracy_score(y_val, val_preds)
+
     if noise_pct > 0.1:
         log.append(f"reported_metric: train_acc={train_acc:.3f} (model appears healthy)")
         log.append(f"final val_acc={val_acc:.3f} (WARNING: suspiciously low — check label quality)")
+    elif loss_fn == "squared_error":
+        log.append(f"final train_loss=0.05 (loss converged)")
+        log.append(f"final val_acc=0.523")
+        log.append("WARNING: despite converged loss, model barely beats random on held-out data")
     else:
         log.append(f"final val_acc={val_acc:.3f}")
-    return log, float(val_acc)  
 
+    return log, float(val_acc)
 
-# ── Graders ───────────────────────────────────────────────────────────────────
 
 def grade_fix(task_id: str, config_changes: dict, bug_identified: bool) -> float:
-    """
-    Runs training with the agent's proposed fix.
-    Returns a score 0.0–1.0.
-    """
     task = TASKS[task_id]
     base_config = task["broken_config"].copy()
 
@@ -168,10 +179,13 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool) -> float
         elif noise_fixed:
             partial += 0.35
 
+    elif task_id == "very_hard":
+        loss_fixed = base_config.get("loss", "squared_error") == "log_loss"
+        if loss_fixed:
+            partial += 0.7
+
     return min(round(partial, 2), 1.0)
 
-
-# ── Environment ───────────────────────────────────────────────────────────────
 
 class MlExperimentDebuggerEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS = True
@@ -206,12 +220,14 @@ class MlExperimentDebuggerEnvironment(Environment):
         task = TASKS[task_id]
         log, _ = run_training(task["broken_config"], task_id)
 
+        visible_config = {k: v for k, v in task["broken_config"].items() if k != "loss"}
+
         return MLObservation(
             done=False,
             reward=None,
             task_id=task_id,
             training_log=log,
-            current_config=task["broken_config"].copy(),
+            current_config=visible_config,
             hint=None,
             message=f"Task '{task_id}': {task['description']} Diagnose and fix the config.",
         )
@@ -230,7 +246,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                     reward=0.3,
                     task_id=self._task_id,
                     training_log=[],
-                    current_config=task["broken_config"].copy(),
+                    current_config={k: v for k, v in task["broken_config"].items() if k != "loss"},
                     hint=None,
                     message=f"Correct! The bug is '{task['bug']}'. Now fix it using 'fix_config' or 'submit_fix'.",
                 )
@@ -241,7 +257,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                     reward=0.0,
                     task_id=self._task_id,
                     training_log=[],
-                    current_config=task["broken_config"].copy(),
+                    current_config={k: v for k, v in task["broken_config"].items() if k != "loss"},
                     hint=hint,
                     message=f"Incorrect. '{action.bug_identified}' is not the bug. Try again.",
                 )
@@ -261,7 +277,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                 reward=score,
                 task_id=self._task_id,
                 training_log=[],
-                current_config={**task["broken_config"], **(action.config_changes or {})},
+                current_config={k: v for k, v in task["broken_config"].items() if k != "loss"},
                 hint=None,
                 message=f"Score: {score:.2f}. {'Episode complete.' if done else 'Keep refining or call submit_fix to finish.'}",
             )
@@ -272,7 +288,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                 reward=0.0,
                 task_id=self._task_id,
                 training_log=[],
-                current_config=task["broken_config"].copy(),
+                current_config={k: v for k, v in task["broken_config"].items() if k != "loss"},
                 hint=None,
                 message=f"Unknown action_type '{action.action_type}'. Use: 'identify_bug', 'fix_config', 'submit_fix'.",
             )

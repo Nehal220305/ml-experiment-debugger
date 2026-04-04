@@ -38,6 +38,7 @@ scenarios so AI agents can learn to diagnose and fix them programmatically.
 | easy | `learning_rate_too_high` | Easy | Loss explodes to NaN within 3 steps |
 | medium | `data_leakage` | Medium | Val set == train set, accuracy misleadingly perfect |
 | hard | `label_noise` | Hard | 30% labels flipped, model appears fine but fails on real data |
+| very_hard | `wrong_loss_function` | Very Hard | Wrong loss function — accuracy plateaus near 52% despite converging loss |
 
 ## Action Space
 
@@ -45,7 +46,7 @@ The agent sends a JSON action with these fields:
 ```json
 {
   "action_type": "identify_bug | fix_config | submit_fix",
-  "bug_identified": "learning_rate_too_high | data_leakage | label_noise",
+  "bug_identified": "learning_rate_too_high | data_leakage | label_noise | wrong_loss_function",
   "config_changes": {"learning_rate": 0.001},
   "explanation": "optional reasoning string"
 }
@@ -60,7 +61,7 @@ The agent sends a JSON action with these fields:
 ## Observation Space
 ```json
 {
-  "task_id": "easy | medium | hard",
+  "task_id": "easy | medium | hard | very_hard",
   "training_log": ["step 1: loss=2.84", "step 2: loss=nan", "..."],
   "current_config": {"learning_rate": 50.0, "max_iter": 20, "..."},
   "hint": "optional hint after wrong attempts",
@@ -100,10 +101,11 @@ docker build -t ml-experiment-debugger -f server/Dockerfile .
 docker run -p 7860:7860 ml-experiment-debugger
 ```
 
-### Run baseline
+### Run inference (using HF router — no paid API key needed)
 ```bash
-export OPENAI_API_KEY=your_key_here
-python baseline.py --host http://localhost:7860
+export HF_TOKEN=your_huggingface_token
+export MODEL_NAME=meta-llama/Llama-3.3-70B-Instruct
+python inference.py --host https://Nehal-2203-ml-experiment-debugger.hf.space
 ```
 
 ## API Endpoints
@@ -128,8 +130,9 @@ Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 |------|-------|
 | easy | 1.00 |
 | medium | 1.00 |
-| hard | 1.00 |
-| **avg** | **1.00** |
+| hard | 0.35 |
+| very_hard | 0.00 |
+| **avg** | **0.59** |
 
 ## Why This Environment Matters
 
