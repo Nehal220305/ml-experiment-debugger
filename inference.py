@@ -10,11 +10,13 @@ import os
 import json
 import argparse
 import requests
+from typing import List, Optional
 from openai import OpenAI
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("GROQ_API_KEY")
+API_KEY = os.getenv("HF_TOKEN")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
+BENCHMARK = "ml-experiment-debugger"
 
 parser = argparse.ArgumentParser(description="ML Experiment Debugger inference")
 parser.add_argument("--host", type=str, default="http://localhost:7860")
@@ -22,6 +24,21 @@ args = parser.parse_args()
 BASE_URL = args.host.rstrip("/")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
 def reset_env(task_id: str) -> dict:
@@ -85,56 +102,62 @@ Current config:
 
 
 def run_task(task_id: str) -> float:
-    print(f"\n{'='*50}")
-    print(f"Task: {task_id.upper()}")
-    print(f"{'='*50}")
+    rewards = []
+    steps_taken = 0
+    score = 0.0
+    success = False
 
-    result = reset_env(task_id)
-    observation = result.get("observation", {})
-    print(f"Message: {observation.get('message', '')}")
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        action = ask_agent(observation, task_id)
-        print(f"Bug identified: {action.get('bug_identified')}")
-        print(f"Config changes: {action.get('config_changes')}")
+        result = reset_env(task_id)
+        observation = result.get("observation", {})
+
+        try:
+            action = ask_agent(observation, task_id)
+            action_str = action.get("bug_identified", "unknown")
+        except Exception as e:
+            action = {"bug_identified": "unknown", "config_changes": {}, "explanation": "failed"}
+            action_str = "unknown"
+
+        fix_result = step_env({
+            "action_type": "submit_fix",
+            "bug_identified": action.get("bug_identified", "unknown"),
+            "config_changes": action.get("config_changes", {}),
+            "explanation": action.get("explanation", ""),
+        })
+
+        reward = fix_result.get("reward", 0.0) or 0.0
+        done = fix_result.get("done", True)
+        rewards.append(reward)
+        steps_taken = 1
+        score = float(reward)
+        success = score >= 0.5
+
+        log_step(step=1, action=action_str, reward=reward, done=done, error=None)
+
     except Exception as e:
-        print(f"Agent failed: {e}")
-        action = {"bug_identified": "unknown", "config_changes": {}, "explanation": "failed"}
+        log_step(step=1, action="error", reward=0.0, done=True, error=str(e))
+        score = 0.0
+        success = False
 
-    fix_result = step_env({
-        "action_type": "submit_fix",
-        "bug_identified": action.get("bug_identified", "unknown"),
-        "config_changes": action.get("config_changes", {}),
-        "explanation": action.get("explanation", ""),
-    })
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
-    reward = fix_result.get("reward", 0.0) or 0.0
-    print(f"Score: {reward:.2f}")
-    return float(reward)
+    return score
 
 
 def main():
-    print("ML Experiment Debugger — Inference")
-    print(f"Server: {BASE_URL}")
-    print(f"Model: {MODEL_NAME}")
-
     scores = {}
     for task_id in ["easy", "medium", "hard", "very_hard", "expert_1", "expert_2"]:
         try:
             scores[task_id] = run_task(task_id)
         except Exception as e:
-            print(f"Task {task_id} failed: {e}")
+            print(f"Task {task_id} failed: {e}", flush=True)
             scores[task_id] = 0.0
 
-    print(f"\n{'='*50}")
-    print("RESULTS")
-    print(f"{'='*50}")
-    for task_id, score in scores.items():
-        bar = "█" * int(score * 20)
-        print(f"  {task_id:<8} {score:.2f}  {bar}")
     avg = sum(scores.values()) / len(scores)
-    print(f"  {'avg':<8} {avg:.2f}")
-    print(f"{'='*50}")
+    print(f"\nFINAL AVG SCORE: {avg:.2f}", flush=True)
 
 
 if __name__ == "__main__":
