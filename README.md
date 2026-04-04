@@ -74,6 +74,44 @@ The agent sends a JSON action with these fields:
 }
 ```
 
+## Example Agent Interaction
+
+### 1. Reset — start a new episode
+```bash
+POST /reset {"task_id": "easy"}
+```
+```json
+{
+  "training_log": ["step 1: loss=0.745 train_acc=0.459", "step 2: loss=11.34 train_acc=0.512", "step 3: loss=nan (exploding gradients, grad_norm=2.3e+06)", "..."],
+  "current_config": {"learning_rate": 50.0, "max_iter": 20, "optimizer": "sgd"},
+  "message": "Task 'easy': Training loss explodes to NaN. Diagnose and fix the config."
+}
+```
+
+### 2. Identify the bug — get +0.3 reward
+```bash
+POST /step {"action": {"action_type": "identify_bug", "bug_identified": "learning_rate_too_high"}}
+```
+```json
+{
+  "reward": 0.3,
+  "done": false,
+  "message": "Correct! The bug is 'learning_rate_too_high'. Now fix it using 'submit_fix'."
+}
+```
+
+### 3. Submit fix — get final score
+```bash
+POST /step {"action": {"action_type": "submit_fix", "bug_identified": "learning_rate_too_high", "config_changes": {"learning_rate": 0.01}}}
+```
+```json
+{
+  "reward": 1.0,
+  "done": true,
+  "message": "Score: 1.00. Episode complete."
+}
+```
+
 ## Reward Function
 
 | Event | Reward |
