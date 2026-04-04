@@ -142,6 +142,32 @@ def get_tasks():
                     "explanation": "string (optional)",
                 },
             },
+            {
+                "id": "expert_1",
+                "name": "Vanishing Gradients",
+                "difficulty": "expert",
+                "description": "Deep network with sigmoid activations — gradients vanish, loss stalls.",
+                "bug": "vanishing_gradients",
+                "action_schema": {
+                    "action_type": "submit_fix",
+                    "bug_identified": "vanishing_gradients",
+                    "config_changes": {"activation": "relu"},
+                    "explanation": "string (optional)",
+                },
+            },
+            {
+                "id": "expert_2",
+                "name": "Missing Normalization",
+                "difficulty": "expert",
+                "description": "Unnormalized inputs cause oscillating loss and poor convergence.",
+                "bug": "missing_normalization",
+                "action_schema": {
+                    "action_type": "submit_fix",
+                    "bug_identified": "missing_normalization",
+                    "config_changes": {"normalize_input": True},
+                    "explanation": "string (optional)",
+                },
+            },
         ]
     }
 
@@ -168,8 +194,10 @@ def get_baseline():
             "easy": 1.00,
             "medium": 1.00,
             "hard": 0.35,
-            "very_hard": 0.00,
-            "average": 0.59,
+            "very_hard": 0.30,
+            "expert_1": 0.60,
+            "expert_2": 1.00,
+            "average": 0.71,
         },
         "model": "llama-3.3-70b-versatile (Groq)",
         "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",

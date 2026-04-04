@@ -60,6 +60,9 @@ Available bugs — use EXACTLY these strings:
 - learning_rate_too_high: learning rate causes NaN loss
 - data_leakage: validation set is same as training set
 - label_noise: training labels are corrupted
+- wrong_loss_function: wrong loss function for classification
+- vanishing_gradients: deep network with sigmoid causes gradients to vanish
+- missing_normalization: unnormalized inputs cause unstable training
 
 You must respond with a valid JSON object with these exact fields:
 {
@@ -151,7 +154,7 @@ def main():
     print(f"Model: llama-3.3-70b-versatile (Groq)")
 
     scores = {}
-    for task_id in ["easy", "medium", "hard", "very_hard"]:
+    for task_id in ["easy", "medium", "hard", "very_hard", "expert_1", "expert_2"]:
         try:
             score = run_task(task_id)
             scores[task_id] = score

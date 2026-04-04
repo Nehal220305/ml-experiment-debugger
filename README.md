@@ -28,17 +28,20 @@ and proposes a fix. Designed for RL training and agent evaluation.
 ## What is this?
 
 Real ML engineers debug broken training runs every day — exploding loss,
-data leakage, silent label corruption. This environment simulates exactly those
-scenarios so AI agents can learn to diagnose and fix them programmatically.
+data leakage, silent label corruption, vanishing gradients. This environment
+simulates exactly those scenarios using real PyTorch training loops so AI
+agents can learn to diagnose and fix them programmatically.
 
 ## Tasks
 
 | Task | Bug | Difficulty | Description |
 |------|-----|------------|-------------|
-| easy | `learning_rate_too_high` | Easy | Loss explodes to NaN within 3 steps |
+| easy | `learning_rate_too_high` | Easy | Loss explodes to NaN — real gradient explosion via PyTorch |
 | medium | `data_leakage` | Medium | Val set == train set, accuracy misleadingly perfect |
-| hard | `label_noise` | Hard | 30% labels flipped, model appears fine but fails on real data |
-| very_hard | `wrong_loss_function` | Very Hard | Wrong loss function — accuracy plateaus near 52% despite converging loss |
+| hard | `label_noise` | Hard | 30% labels flipped + bad LR, model appears fine but fails on real data |
+| very_hard | `wrong_loss_function` | Very Hard | MSE loss for classification — accuracy plateaus near 52% despite converging loss |
+| expert_1 | `vanishing_gradients` | Expert | Deep network with sigmoid activations — gradients vanish, loss stalls |
+| expert_2 | `missing_normalization` | Expert | Unnormalized inputs (values >1000) cause wildly oscillating loss |
 
 ## Action Space
 
@@ -46,7 +49,7 @@ The agent sends a JSON action with these fields:
 ```json
 {
   "action_type": "identify_bug | fix_config | submit_fix",
-  "bug_identified": "learning_rate_too_high | data_leakage | label_noise | wrong_loss_function",
+  "bug_identified": "learning_rate_too_high | data_leakage | label_noise | wrong_loss_function | vanishing_gradients | missing_normalization",
   "config_changes": {"learning_rate": 0.001},
   "explanation": "optional reasoning string"
 }
@@ -61,9 +64,9 @@ The agent sends a JSON action with these fields:
 ## Observation Space
 ```json
 {
-  "task_id": "easy | medium | hard | very_hard",
-  "training_log": ["step 1: loss=2.84", "step 2: loss=nan", "..."],
-  "current_config": {"learning_rate": 50.0, "max_iter": 20, "..."},
+  "task_id": "easy | medium | hard | very_hard | expert_1 | expert_2",
+  "training_log": ["step 1: loss=0.745 train_acc=0.459", "step 2: loss=11.34 train_acc=0.512", "..."],
+  "current_config": {"learning_rate": 50.0, "max_iter": 20, "optimizer": "sgd", "..."},
   "hint": "optional hint after wrong attempts",
   "message": "feedback string",
   "reward": 0.0,
@@ -88,7 +91,7 @@ Score range: 0.0 – 1.0.
 ### Local (Python)
 ```bash
 # Install dependencies
-pip install openenv-core fastapi uvicorn scikit-learn numpy pydantic openai
+pip install openenv-core fastapi uvicorn scikit-learn numpy pydantic openai torch
 
 # Run server
 cd server
@@ -121,7 +124,6 @@ python inference.py --host https://Nehal-2203-ml-experiment-debugger.hf.space
 | `/tasks` | GET | Lists all tasks and action schema |
 | `/docs` | GET | Interactive API documentation |
 
-
 ## Baseline Scores
 
 Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
@@ -131,8 +133,10 @@ Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 | easy | 1.00 |
 | medium | 1.00 |
 | hard | 0.35 |
-| very_hard | 0.00 |
-| **avg** | **0.59** |
+| very_hard | 0.30 |
+| expert_1 | 0.60 |
+| expert_2 | 1.00 |
+| **avg** | **0.71** |
 
 ## Why This Environment Matters
 
@@ -141,11 +145,13 @@ No existing OpenEnv environment covers this domain. This environment enables:
 
 - Training RL agents to diagnose ML failures automatically
 - Evaluating LLMs on realistic engineering debugging tasks
-- Benchmarking agent performance across easy/medium/hard difficulty
+- Benchmarking agent performance across 6 difficulty levels
+- Testing agent ability to reason about gradient flow, data quality, and loss design
 
 ## Environment Details
 
 - **Framework:** OpenEnv + FastAPI + Docker
-- **Grader:** Executes real sklearn training loops — scores are objective, not heuristic
+- **Training:** Real PyTorch training loops — all loss curves and metrics are genuine
+- **Grader:** Runs actual PyTorch training with the agent's fix — scores are objective, not heuristic
 - **Reproducible:** Fixed random seed (42) ensures identical results every run
 - **Live Space:** https://huggingface.co/spaces/Nehal-2203/ml-experiment-debugger
