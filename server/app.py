@@ -12,6 +12,9 @@ from typing import Optional, Dict, Any
 from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment
 from models import MLAction
 
+import asyncio
+from functools import partial
+
 app = FastAPI(
     title="ML Experiment Debugger",
     description="OpenEnv environment for debugging broken ML training experiments.",
@@ -43,15 +46,15 @@ async def reset(
         body = await request.json()
     except:
         body = {}
-    
+
     final_task_id = task_id or (body.get("task_id") if body else None) or "easy"
     final_seed = seed or (body.get("seed") if body else None)
     final_episode_id = episode_id or (body.get("episode_id") if body else None)
-    
-    obs = env.reset(
-        task_id=final_task_id,
-        seed=final_seed,
-        episode_id=final_episode_id,
+
+    loop = asyncio.get_event_loop()
+    obs = await loop.run_in_executor(
+        None,
+        partial(env.reset, task_id=final_task_id, seed=final_seed, episode_id=final_episode_id)
     )
     return {
         "observation": obs.model_dump(),
@@ -59,9 +62,11 @@ async def reset(
         "done": obs.done,
     }
 
+
 @app.post("/step")
-def step(request: StepRequest):
-    obs = env.step(request.action)
+async def step(request: StepRequest):
+    loop = asyncio.get_event_loop()
+    obs = await loop.run_in_executor(None, partial(env.step, request.action))
     return {
         "observation": obs.model_dump(),
         "reward": obs.reward,
@@ -195,9 +200,9 @@ def get_baseline():
             "medium": 1.00,
             "hard": 0.35,
             "very_hard": 0.30,
-            "expert_1": 0.60,
+            "expert_1": 1.00,
             "expert_2": 1.00,
-            "average": 0.71,
+            "average": 0.78,
         },
         "model": "llama-3.3-70b-versatile (Groq)",
         "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",

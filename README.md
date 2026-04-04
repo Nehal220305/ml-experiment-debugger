@@ -134,9 +134,9 @@ Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 | medium | 1.00 |
 | hard | 0.35 |
 | very_hard | 0.30 |
-| expert_1 | 0.60 |
+| expert_1 | 1.00 |
 | expert_2 | 1.00 |
-| **avg** | **0.71** |
+| **avg** | **0.78** |
 
 ## Why This Environment Matters
 
@@ -153,5 +153,8 @@ No existing OpenEnv environment covers this domain. This environment enables:
 - **Framework:** OpenEnv + FastAPI + Docker
 - **Training:** Real PyTorch training loops — all loss curves and metrics are genuine
 - **Grader:** Runs actual PyTorch training with the agent's fix — scores are objective, not heuristic
-- **Reproducible:** Fixed random seed (42) ensures identical results every run
+- **Randomized:** Bug parameters vary per episode — agents cannot memorize answers
+- **Multi-agent:** True concurrent session isolation per episode_id
+- **Session Management:** Auto-expiry of abandoned sessions after 1 hour
+- **Reproducible:** Fixed random seed (42) ensures consistent bug symptoms
 - **Live Space:** https://huggingface.co/spaces/Nehal-2203/ml-experiment-debugger
