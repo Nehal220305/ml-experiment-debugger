@@ -40,13 +40,16 @@ def ask_agent(observation: dict, task_id: str) -> dict:
     training_log = "\n".join(observation.get("training_log", []))
     current_config = json.dumps(observation.get("current_config", {}), indent=2)
     message = observation.get("message", "")
+    hint = observation.get("hint", "")
 
     system_prompt = """You are an expert ML engineer debugging broken training experiments.
 Available bugs — use EXACTLY these strings:
-- learning_rate_too_high
-- data_leakage
-- label_noise
-- wrong_loss_function
+- learning_rate_too_high: learning rate causes NaN/exploding loss
+- data_leakage: validation set is same as training set
+- label_noise: training labels are corrupted
+- wrong_loss_function: wrong loss function for classification task
+- vanishing_gradients: deep network with sigmoid causes gradients to vanish
+- missing_normalization: unnormalized inputs cause unstable training
 
 Respond with a valid JSON object only:
 {
@@ -58,6 +61,7 @@ No markdown, no backticks, no extra text."""
 
     user_prompt = f"""Task: {task_id}
 Message: {message}
+Hint: {hint if hint else 'None'}
 Training log:
 {training_log}
 Current config:
@@ -115,7 +119,7 @@ def main():
     print(f"Model: {MODEL_NAME}")
 
     scores = {}
-    for task_id in ["easy", "medium", "hard", "very_hard"]:
+    for task_id in ["easy", "medium", "hard", "very_hard", "expert_1", "expert_2"]:
         try:
             scores[task_id] = run_task(task_id)
         except Exception as e:
