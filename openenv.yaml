@@ -1,35 +1,46 @@
 name: ml_experiment_debugger
-version: "1.0.0"
+version: "2.0.0"
 description: >
   An RL environment where an AI agent debugs broken ML training experiments.
-  The agent receives a faulty training config and log, identifies the bug,
-  and proposes a fix. Three tasks of increasing difficulty: exploding loss,
-  data leakage, and silent label noise.
-
-author: "Raman Asolekar, Nehal Gupta"
+  The agent receives a faulty training config and real PyTorch training log,
+  identifies the bug, and proposes a fix. Six tasks of increasing difficulty
+  covering exploding loss, data leakage, label noise, wrong loss function,
+  vanishing gradients, and missing normalization.
+author: "Nehal Gupta, Raman Asolekar"
 license: "BSD-3-Clause"
 tags:
   - machine-learning
   - debugging
   - reinforcement-learning
   - openenv
-
+  - pytorch
+  - gradient-debugging
+  - ml-debugging
 tasks:
   - id: easy
     name: "Exploding Loss"
-    description: "Learning rate is too high — loss goes to NaN immediately."
+    description: "Learning rate is too high — real gradient explosion via PyTorch."
     difficulty: easy
-
   - id: medium
     name: "Data Leakage"
-    description: "Validation set is same as training set — accuracy is misleadingly perfect."
+    description: "Validation set is same as training set — accuracy misleadingly perfect."
     difficulty: medium
-
   - id: hard
     name: "Silent Label Noise"
-    description: "30% of labels are flipped — model trains fine but fails on real data."
+    description: "30% labels flipped + bad LR — model appears fine but fails on real data."
     difficulty: hard
-
+  - id: very_hard
+    name: "Wrong Loss Function"
+    description: "MSE loss for classification — accuracy plateaus near 52% despite converging loss."
+    difficulty: very_hard
+  - id: expert_1
+    name: "Vanishing Gradients"
+    description: "Deep network with sigmoid activations — gradients vanish, loss stalls."
+    difficulty: expert
+  - id: expert_2
+    name: "Missing Normalization"
+    description: "Unnormalized inputs (values >1000) cause wildly oscillating loss."
+    difficulty: expert
 action_space:
   type: object
   fields:
@@ -38,7 +49,7 @@ action_space:
       description: "One of: identify_bug, fix_config, submit_fix"
     bug_identified:
       type: string
-      description: "Name of the bug identified"
+      description: "One of: learning_rate_too_high, data_leakage, label_noise, wrong_loss_function, vanishing_gradients, missing_normalization"
       optional: true
     config_changes:
       type: object
@@ -48,16 +59,15 @@ action_space:
       type: string
       description: "Agent's reasoning for partial credit"
       optional: true
-
 observation_space:
   type: object
   fields:
     task_id:
       type: string
-      description: "Active task: easy, medium, or hard"
+      description: "Active task: easy, medium, hard, very_hard, expert_1, expert_2"
     training_log:
       type: array
-      description: "Step-by-step training output showing the broken behavior"
+      description: "Real PyTorch training output showing loss, accuracy, gradient norms"
     current_config:
       type: object
       description: "The broken config the agent must fix"
@@ -75,15 +85,13 @@ observation_space:
     done:
       type: boolean
       description: "True when episode is complete"
-
 reward:
   min: 0.0
   max: 1.0
   description: >
     +0.3 for correctly identifying the bug type.
     +0.7 for a fix that makes training converge successfully.
-    Partial credit given at each step — not just at episode end.
-
+    +0.35 for partial fix. Partial credit given at each step.
 server:
   port: 7860
   framework: fastapi
@@ -95,3 +103,4 @@ server:
     - /baseline
     - /grader
     - /tasks
+    - /schema
