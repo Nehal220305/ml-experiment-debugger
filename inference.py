@@ -104,7 +104,7 @@ Current config:
 def run_task(task_id: str) -> float:
     rewards = []
     steps_taken = 0
-    score = 0.0
+    score = 0.001
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
@@ -128,19 +128,21 @@ def run_task(task_id: str) -> float:
         })
 
         reward = fix_result.get("reward", 0.0) or 0.0
+        reward = max(0.001, min(0.999, float(reward)))
         done = fix_result.get("done", True)
         rewards.append(reward)
         steps_taken = 1
-        score = float(reward)
-        score = max(0.001, min(0.999, score))
+        score = reward
         success = score >= 0.5
 
         log_step(step=1, action=action_str, reward=reward, done=done, error=None)
 
     except Exception as e:
-        log_step(step=1, action="error", reward=0.0, done=True, error=str(e))
-        score = 0.0
+        rewards.append(0.001)
+        steps_taken = 1
+        score = 0.001
         success = False
+        log_step(step=1, action="error", reward=0.001, done=True, error=str(e))
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
