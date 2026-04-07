@@ -132,6 +132,7 @@ def run_task(task_id: str) -> float:
         rewards.append(reward)
         steps_taken = 1
         score = float(reward)
+        score = max(0.001, min(0.999, score))
         success = score >= 0.5
 
         log_step(step=1, action=action_str, reward=reward, done=done, error=None)
