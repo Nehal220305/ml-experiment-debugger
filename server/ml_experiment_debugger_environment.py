@@ -241,7 +241,7 @@ def run_training(config: dict, task_id: str) -> tuple:
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=55,
         )
         output = result.stdout.strip()
         stderr = result.stderr.strip()

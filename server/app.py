@@ -4,6 +4,17 @@ import asyncio
 from functools import partial
 from typing import Optional, Dict, Any
 
+# Pre-warm PyTorch at startup to avoid cold-start timeouts
+import threading
+def _prewarm_torch():
+    try:
+        import torch
+        import torch.nn as nn
+        _ = nn.Linear(1, 1)
+    except:
+        pass
+threading.Thread(target=_prewarm_torch, daemon=True).start()
+
 sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/server")
 
