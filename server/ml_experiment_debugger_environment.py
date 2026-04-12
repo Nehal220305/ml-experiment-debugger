@@ -243,13 +243,6 @@ if final_val_acc < 0.55 and final_train_acc > 0.7:
 
 def run_training(config: dict, task_id: str) -> tuple:
     """Execute training inline (no subprocess) for fast response on HF."""
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    import numpy as np
-    from sklearn.datasets import make_classification
-    from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler
 
     torch.manual_seed(42)
     np.random.seed(42)
