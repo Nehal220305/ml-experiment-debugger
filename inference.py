@@ -8,6 +8,7 @@ MANDATORY env variables:
 import time
 import os
 import json
+import re
 import argparse
 import requests
 from typing import List, Optional
@@ -26,6 +27,17 @@ BASE_URL = args.host.rstrip("/")
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 
+def clamp_reward(reward) -> float:
+    """Strictly clamp reward to open interval (0, 1) — never 0.0 or 1.0."""
+    try:
+        r = float(reward)
+    except (TypeError, ValueError):
+        r = 0.0
+    # Use 4 decimal places internally to avoid rounding to 0.00 or 1.00
+    r = max(0.0100, min(0.9900, r))
+    return round(r, 4)
+
+
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
@@ -33,10 +45,12 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
     done_val = str(done).lower()
-    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+    # Use 4 decimal places so values like 0.01 never round to 0.00
+    print(f"[STEP] step={step} action={action} reward={reward:.4f} done={done_val} error={error_val}", flush=True)
+
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    rewards_str = ",".join(f"{r:.4f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
@@ -89,7 +103,6 @@ Diagnose the bug and suggest a fix. Your response field must be a plain text str
             raw = raw[4:]
     raw = raw.strip()
 
-    import re
     raw = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw)
 
     parsed = json.loads(raw)
@@ -106,7 +119,7 @@ Diagnose the bug and suggest a fix. Your response field must be a plain text str
 def run_task(task_id: str) -> float:
     rewards = []
     steps_taken = 0
-    score = 0.01
+    score = clamp_reward(0.01)
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
@@ -117,7 +130,7 @@ def run_task(task_id: str) -> float:
 
         try:
             action = ask_agent(observation, task_id)
-            action_str = action.get("bug_identified", "unknown")
+            action_str = action.get("bug_identified", "unknown") or "unknown"
         except Exception as e:
             action = {"bug_identified": "unknown", "config_changes": {}, "explanation": "failed"}
             action_str = "unknown"
@@ -130,8 +143,10 @@ def run_task(task_id: str) -> float:
             "explanation": action.get("explanation", ""),
         })
 
-        reward = fix_result.get("reward", 0.0) or 0.0
-        reward = max(0.01, min(0.99, float(reward)))
+        # Clamp reward — strictly between 0 and 1, never 0.0 or 1.0
+        raw_reward = fix_result.get("reward")
+        reward = clamp_reward(raw_reward if raw_reward is not None else 0.01)
+
         done = fix_result.get("done", True)
         rewards.append(reward)
         steps_taken = 1
@@ -141,11 +156,12 @@ def run_task(task_id: str) -> float:
         log_step(step=1, action=action_str, reward=reward, done=done, error=None)
 
     except Exception as e:
-        rewards.append(0.01)
+        fallback = clamp_reward(0.01)
+        rewards.append(fallback)
         steps_taken = 1
-        score = 0.01
+        score = fallback
         success = False
-        log_step(step=1, action="error", reward=0.01, done=True, error=str(e))
+        log_step(step=1, action="error", reward=fallback, done=True, error=str(e))
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
@@ -177,10 +193,10 @@ def main():
             scores[task_id] = run_task(task_id)
         except Exception as e:
             print(f"Task {task_id} failed: {e}", flush=True)
-            scores[task_id] = 0.01
+            scores[task_id] = clamp_reward(0.01)
 
     avg = sum(scores.values()) / len(scores)
-    print(f"\nFINAL AVG SCORE: {avg:.2f}", flush=True)
+    print(f"\nFINAL AVG SCORE: {avg:.4f}", flush=True)
 
 
 if __name__ == "__main__":
