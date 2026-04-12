@@ -326,12 +326,17 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_c
     return min(round(partial, 2), 1.0)
 
 
-def grade_free_text(task_id: str, response: str, broken_config: dict) -> tuple:
-    from server.graders import grade_response
-    bug = TASKS[task_id]["bug"]
-    return grade_response(task_id, response, bug)
-
 HIDDEN_KEYS = {"loss_fn", "activation", "normalize_input", "depth"}
+
+
+def grade_free_text(task_id: str, response: str, broken_config: dict) -> tuple:
+    bug = TASKS[task_id]["bug"]
+    try:
+        from server.llm_judge import grade_with_llm_judge
+        return grade_with_llm_judge(task_id, response, bug)
+    except Exception:
+        from server.graders import grade_response
+        return grade_response(task_id, response, bug)
 
 
 def _get_random_scenario(task_id: str) -> dict:
