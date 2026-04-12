@@ -156,7 +156,24 @@ def run_task(task_id: str) -> float:
     return score
 
 
+def wait_for_server(max_wait: int = 120) -> bool:
+    print(f"Waiting for server at {BASE_URL}...", flush=True)
+    start = time.time()
+    while time.time() - start < max_wait:
+        try:
+            r = requests.get(f"{BASE_URL}/health", timeout=5)
+            if r.status_code == 200:
+                print(f"Server ready after {time.time()-start:.1f}s", flush=True)
+                return True
+        except:
+            pass
+        time.sleep(3)
+    print("ERROR: Server did not start in time", flush=True)
+    return False
+
+
 def main():
+    wait_for_server()
     scores = {}
     for task_id in ["easy", "medium", "hard", "very_hard", "expert_1", "expert_2"]:
         try:
