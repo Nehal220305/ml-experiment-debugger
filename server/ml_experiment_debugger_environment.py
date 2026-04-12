@@ -15,6 +15,14 @@ import textwrap
 from typing import Optional
 from openenv.core.env_server import Environment
 from models import MLAction, MLObservation, MLState
+# Pre-import PyTorch at module load time to avoid cold-start delays
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 SESSION_TIMEOUT = 3600
 
