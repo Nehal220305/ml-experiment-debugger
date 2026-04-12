@@ -24,6 +24,13 @@ from sklearn.preprocessing import StandardScaler
 SESSION_TIMEOUT = 3600
 
 
+def _clamp_reward(reward):
+    """Ensure reward is strictly between 0 and 1 (exclusive). Platform requires (0, 1)."""
+    if reward is None:
+        return None
+    return max(0.01, min(0.99, round(float(reward), 4)))
+
+
 def get_broken_config(task_id: str) -> dict:
     if task_id == "easy":
         return {
@@ -570,6 +577,7 @@ class MlExperimentDebuggerEnvironment(Environment):
             response = action.response or action.explanation or ""
             broken_config = session.get("broken_config", get_broken_config(task_id))
             score, feedback = grade_free_text(task_id, response, broken_config)
+            score = _clamp_reward(score)
             return MLObservation(
                 done=True,
                 reward=score,
@@ -616,6 +624,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                 session["bug_identified"],
                 broken_config,
             )
+            score = _clamp_reward(score)
             done = action.action_type == "submit_fix"
 
             if done:

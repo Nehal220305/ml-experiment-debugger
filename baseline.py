@@ -140,6 +140,7 @@ def run_task(task_id: str) -> float:
     })
 
     final_reward = fix_result.get("reward", 0.0) or 0.0
+    final_reward = max(0.01, min(0.99, float(final_reward)))
     fix_obs = fix_result.get("observation", {})
     print(f"Fix result: {fix_obs.get('message', '')}")
     print(f"Feedback: {fix_obs.get('feedback', '')}")
@@ -160,7 +161,7 @@ def main():
             scores[task_id] = score
         except Exception as e:
             print(f"Task {task_id} failed: {e}")
-            scores[task_id] = 0.0
+            scores[task_id] = 0.01
 
     print(f"\n{'='*50}")
     print("BASELINE RESULTS")

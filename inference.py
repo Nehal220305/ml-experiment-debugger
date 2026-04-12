@@ -106,7 +106,7 @@ Diagnose the bug and suggest a fix. Your response field must be a plain text str
 def run_task(task_id: str) -> float:
     rewards = []
     steps_taken = 0
-    score = 0.001
+    score = 0.01
     success = False
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)

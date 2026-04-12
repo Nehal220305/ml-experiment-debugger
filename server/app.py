@@ -73,9 +73,11 @@ async def reset(
         None,
         partial(get_env().reset, task_id=final_task_id, seed=final_seed, episode_id=final_episode_id)
     )
+    # Clamp reward on the observation object BEFORE serialization
+    obs.reward = clamp_reward(obs.reward)
     return {
         "observation": obs.model_dump(),
-        "reward": clamp_reward(obs.reward),
+        "reward": obs.reward,
         "done": obs.done,
     }
 
@@ -84,9 +86,11 @@ async def reset(
 async def step(request: StepRequest):
     loop = asyncio.get_event_loop()
     obs = await loop.run_in_executor(None, partial(get_env().step, request.action))
+    # Clamp reward on the observation object BEFORE serialization
+    obs.reward = clamp_reward(obs.reward)
     return {
         "observation": obs.model_dump(),
-        "reward": clamp_reward(obs.reward),
+        "reward": obs.reward,
         "done": obs.done,
     }
 
