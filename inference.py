@@ -103,7 +103,13 @@ Current config:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    return json.loads(raw.strip())
+    parsed = json.loads(raw.strip())
+    # Ensure response is a string, not a nested object
+    if isinstance(parsed.get("response"), dict):
+        parsed["response"] = json.dumps(parsed["response"])
+    elif not isinstance(parsed.get("response"), str):
+        parsed["response"] = str(parsed.get("response", ""))
+    return parsed
 
 
 def run_task(task_id: str) -> float:
