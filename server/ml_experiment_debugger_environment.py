@@ -327,127 +327,25 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_c
 
 
 def grade_free_text(task_id: str, response: str, broken_config: dict) -> tuple:
-    """
-    Grade a free-text response from the agent.
-    Returns (score, feedback) tuple.
-    """
-    if not response:
-        return 0.01, "No response provided."
-
-    response_lower = response.lower()
-    score = 0.0
-    feedback_parts = []
-
-    task = TASKS[task_id]
-    bug = task["bug"]
-
-    # --- Bug identification keywords ---
-    bug_keywords = {
-        "learning_rate_too_high": [
-            "learning rate", "lr", "exploding gradient", "nan", "too high",
-            "gradient explosion", "step size"
-        ],
-        "data_leakage": [
-            "data leakage", "leakage", "validation set", "train val split",
-            "same data", "identical accuracy", "overfitting"
-        ],
-        "label_noise": [
-            "label noise", "noisy label", "corrupted label", "label corruption",
-            "wrong label", "mislabeled", "flipped label", "corrupted",
-            "noise", "poor real-world", "label quality"
-        ],
-        "wrong_loss_function": [
-            "loss function", "mse", "mean squared error", "cross entropy",
-            "bce", "binary cross", "classification loss", "wrong loss",
-            "incorrect loss", "mean square", "regression loss",
-            "wrong loss function", "inappropriate loss", "loss is wrong",
-            "loss is incorrect", "loss is not appropriate", "classification task",
-            "for classification", "not suitable"
-        ],
-        "vanishing_gradients": [
-            "vanishing gradient", "sigmoid", "gradient vanish", "deep network",
-            "gradient flow", "activation function", "relu", "barely moves",
-            "stalls", "gradient norm", "dying"
-        ],
-        "missing_normalization": [
-            "lack of feature", "lack of normalization", "feature normalization",
-            "without normalization", "no normalization",
-            "normalize", "standardize", "standard scaler", "min max",
-            "feature scaling", "preprocess", "normalization",
-            "scale the", "scaling the", "apply", "scaler",
-            "normalize the input", "normalize input", "feature normalize",
-            "input normalization", "standardization"
-        ],
-    }
-
-    # --- Fix keywords ---
-    fix_keywords = {
-        "learning_rate_too_high": [
-            "reduce", "lower", "decrease", "0.01", "0.001", "smaller", "less"
-        ],
-        "data_leakage": [
-            "separate", "split", "held-out", "train test split", "fix split",
-            "independent validation"
-        ],
-        "label_noise": [
-            "clean", "remove noise", "fix labels", "label_noise_pct",
-            "correct labels", "0.0"
-        ],
-        "wrong_loss_function": [
-            "cross-entropy loss", "to cross", "loss to cross", "change to cross",
-            "cross entropy", "bce", "binary cross", "log loss",
-            "classification loss", "change loss"
-        ],
-        "vanishing_gradients": [
-            "relu", "batch norm", "residual", "skip connection",
-            "change activation", "gradient clipping"
-        ],
-        "missing_normalization": [
-            "standardscaler", "minmaxscaler", "add normalization", 
-            "normalization layer", "scale the input", "scale input",
-            "zero mean", "unit variance", "mean of 0"
-            "normalize", "standardize", "standard scaler", "min max",
-            "feature scaling", "preprocess"
-        ],
-    }
-
-    # Score bug identification (0.4)
-    keywords = bug_keywords.get(bug, [])
-    matched_bug_keywords = [k for k in keywords if k in response_lower]
-    if len(matched_bug_keywords) >= 3:
-        score += 0.4
-        feedback_parts.append(f"✓ Correctly identified the bug ({bug})")
-    elif len(matched_bug_keywords) >= 2:
-        score += 0.2
-        feedback_parts.append(f"~ Partially identified the bug")
-    else:
-        feedback_parts.append(f"✗ Did not identify the bug ({bug})")
-
-    # Score fix suggestion (0.4)
-    fix_kws = fix_keywords.get(bug, [])
-    matched_fix_keywords = [k for k in fix_kws if k in response_lower]
-    if len(matched_fix_keywords) >= 1:
-        score += 0.4
-        feedback_parts.append(f"✓ Suggested a valid fix")
-    else:
-        feedback_parts.append(f"✗ Did not suggest a valid fix")
-
-    # Score explanation quality (0.2)
-    if len(response) > 100:
-        score += 0.1
-        feedback_parts.append("✓ Provided detailed explanation")
-    if len(response) > 200:
-        score += 0.1
-        feedback_parts.append("✓ Thorough analysis")
-
-    # Clamp to valid range
-    score = max(0.01, min(0.99, round(score, 2)))
-    feedback = " | ".join(feedback_parts)
-
-    return score, feedback
-
+    from server.graders import grade_response
+    bug = TASKS[task_id]["bug"]
+    return grade_response(task_id, response, bug)
 
 HIDDEN_KEYS = {"loss_fn", "activation", "normalize_input", "depth"}
+
+
+def _get_random_scenario(task_id: str) -> dict:
+    from server.graders import EASY_SCENARIOS, MEDIUM_SCENARIOS, HARD_SCENARIOS
+    scenarios = {
+        "easy": EASY_SCENARIOS,
+        "medium": MEDIUM_SCENARIOS,
+        "hard": HARD_SCENARIOS,
+    }
+    task_scenarios = scenarios.get(task_id, [])
+    if task_scenarios:
+        return random.choice(task_scenarios)
+    return {}
+
 
 
 class MlExperimentDebuggerEnvironment(Environment):
@@ -492,6 +390,10 @@ class MlExperimentDebuggerEnvironment(Environment):
         episode_id = episode_id or str(uuid.uuid4())
 
         broken_config = get_broken_config(task_id)
+
+        # Pick random scenario description
+        scenario = _get_random_scenario(task_id)
+        task_description = scenario["description"] if scenario else task["description"]
 
         self._sessions[episode_id] = {
             "task_id": task_id,
@@ -621,12 +523,12 @@ class MlExperimentDebuggerEnvironment(Environment):
         else:
             return MLObservation(
                 done=False,
-                reward=0.0,
+                reward=None,
                 task_id=task_id,
-                training_log=[],
+                training_log=log,
                 current_config=visible_config,
                 hint=None,
-                message=f"Unknown action_type '{action.action_type}'. Use: 'identify_bug', 'fix_config', 'submit_fix'.",
+                message=f"Task '{task_id}': {task_description} Diagnose and fix the config.",
             )
 
     @property

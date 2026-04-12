@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system openenv-core fastapi uvicorn \
+            scikit-learn numpy pydantic openai groq requests
+          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Test environment loads
+        run: |
+          python -c "from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment; print('OK')"
+
+      - name: Test all tasks reset
+        run: |
+          python -c "
+          from server.ml_experiment_debugger_environment import run_training, get_broken_config, TASKS
+          for task_id in TASKS:
+              config = get_broken_config(task_id)
+              log, score = run_training(config, task_id)
+              assert len(log) > 0, f'Empty log for {task_id}'
+              print(f'{task_id}: OK ({len(log)} log lines)')
+          "
+
+      - name: Test graders
+        run: |
+          python -c "
+          from server.graders import grade_response
+          score, feedback = grade_response('easy', 'learning_rate_too_high', 'The learning rate of 100 is too high causing exploding gradients. Fix: reduce to 0.01')
+          assert score > 0.5, f'Easy grader failed: {score}'
+          print(f'Grader test: {score} — {feedback}')
+          "
+
+      - name: Validate openenv spec
+        run: openenv validate .
+        continue-on-error: true
