@@ -67,7 +67,7 @@ The agent sends a JSON action with a free-text diagnosis:
   "current_config": {"learning_rate": 50.0, "max_iter": 20, "optimizer": "sgd", "..."},
   "hint": "optional hint after wrong attempts",
   "message": "feedback string",
-  "reward": 0.0,
+  "reward": 0.01,
   "done": false
 }
 ```
@@ -113,8 +113,7 @@ POST /step {"action": {"action_type": "diagnose", "response": "The learning rate
 | Very Hard task cap | 0.75 |
 | Expert tasks cap | 0.55-0.60 |
 
-Reward is given at every step — not just at episode end.
-Score range: 0.0 – 1.0.
+Score range: 0.01 – 0.99 (strictly exclusive of 0 and 1).
 
 ## Setup & Usage
 
@@ -182,7 +181,7 @@ No existing OpenEnv environment covers this domain. This environment enables:
 
 - **Framework:** OpenEnv + FastAPI + Docker
 - **Grader:** LLM-as-judge (Llama-3.3-70B) with keyword fallback — evaluates bug identification, fix quality, and explanation depth
-- **Training:** Real subprocess Python execution — all loss curves and metrics are genuine PyTorch output
+- **Training:** Real inline PyTorch execution — all loss curves and metrics are genuine PyTorch output
 - **Randomized:** Bug parameters vary per episode — agents cannot memorize answers
 - **Multi-agent:** True concurrent session isolation per episode_id
 - **Session Management:** Auto-expiry of abandoned sessions after 1 hour
