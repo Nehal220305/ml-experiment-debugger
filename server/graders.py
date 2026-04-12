@@ -341,7 +341,7 @@ def grade_very_hard(response: str, bug: str) -> Tuple[float, str]:
         score += 0.25
         feedback.append("✓ Suggested correct loss function")
 
-    return safe_reward(min(score, 0.85)), " | ".join(feedback)
+    return safe_reward(min(score, 0.75)), " | ".join(feedback)
 
 
 def grade_expert_1(response: str, bug: str) -> Tuple[float, str]:
@@ -389,7 +389,7 @@ def grade_expert_1(response: str, bug: str) -> Tuple[float, str]:
         score += 0.15
         feedback.append("~ Suggested one fix")
 
-    return safe_reward(min(score, 0.80)), " | ".join(feedback)
+    return safe_reward(min(score, 0.60)), " | ".join(feedback)
 
 
 def grade_expert_2(response: str, bug: str) -> Tuple[float, str]:
@@ -436,7 +436,7 @@ def grade_expert_2(response: str, bug: str) -> Tuple[float, str]:
         score += 0.25
         feedback.append("✓ Suggested normalization fix")
 
-    return safe_reward(min(score, 0.80)), " | ".join(feedback)
+    return safe_reward(min(score, 0.55)), " | ".join(feedback)
 
 
 GRADERS = {

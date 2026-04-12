@@ -13,7 +13,7 @@ class MLAction(Action):
 
     action_type: str = Field(
         ...,
-        description="One of: 'diagnose' (free-text), 'submit_fix' (structured)"
+        description="One of: 'diagnose' (free-text analysis), 'request_more_steps' (see more training data), 'inspect_gradients' (see gradient stats)"
     )
     response: Optional[str] = Field(
         default=None,

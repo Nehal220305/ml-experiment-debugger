@@ -96,8 +96,8 @@ def get_tasks():
                 "description": "Learning rate is too high — real gradient explosion via PyTorch.",
                 "bug": "learning_rate_too_high",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
             {
@@ -107,8 +107,8 @@ def get_tasks():
                 "description": "Validation set is same as training set — accuracy is misleadingly perfect.",
                 "bug": "data_leakage",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
             {
@@ -118,8 +118,8 @@ def get_tasks():
                 "description": "Labels corrupted + bad LR — model appears healthy but fails on real data.",
                 "bug": "label_noise",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
             {
@@ -129,8 +129,8 @@ def get_tasks():
                 "description": "MSE loss for classification — accuracy plateaus near 52% despite converging loss.",
                 "bug": "wrong_loss_function",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
             {
@@ -140,8 +140,8 @@ def get_tasks():
                 "description": "Deep network with sigmoid activations — gradients vanish, loss stalls.",
                 "bug": "vanishing_gradients",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
             {
@@ -151,8 +151,8 @@ def get_tasks():
                 "description": "Unnormalized inputs (values >1000) cause wildly oscillating loss.",
                 "bug": "missing_normalization",
                 "action_schema": {
-                    "action_type": "diagnose",
-                    "response": "Free-text diagnosis and fix explanation",
+                    "action_type": "diagnose | request_more_steps | inspect_gradients",
+                    "response": "Free-text diagnosis and fix explanation (for diagnose action)",
                 },
             },
         ]
@@ -177,13 +177,13 @@ def get_grader():
 def get_baseline():
     return {
         "baseline_scores": {
-            "easy": 0.99,
-            "medium": 0.99,
-            "hard": 0.99,
-            "very_hard": 0.99,
-            "expert_1": 0.99,
-            "expert_2": 0.99,
-            "average": 0.99,
+            "easy": 0.95,
+            "medium": 0.85,
+            "hard": 0.80,
+            "very_hard": 0.75,
+            "expert_1": 0.50,
+            "expert_2": 0.55,
+            "average": 0.73,
         },
         "model": "llama-3.3-70b-versatile (Groq)",
         "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",

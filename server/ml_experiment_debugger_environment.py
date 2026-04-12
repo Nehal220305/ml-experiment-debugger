@@ -390,8 +390,7 @@ class MlExperimentDebuggerEnvironment(Environment):
         episode_id = episode_id or str(uuid.uuid4())
 
         broken_config = get_broken_config(task_id)
-
-        # Pick random scenario description
+        task = TASKS[task_id]
         scenario = _get_random_scenario(task_id)
         task_description = scenario["description"] if scenario else task["description"]
 
@@ -454,6 +453,45 @@ class MlExperimentDebuggerEnvironment(Environment):
         task = TASKS[task_id]
         broken_config = session.get("broken_config", get_broken_config(task_id))
         visible_config = {k: v for k, v in broken_config.items() if k not in HIDDEN_KEYS}
+
+        if action.action_type == "request_more_steps":
+            # Run 10 more training steps and return new log
+            extra_config = broken_config.copy()
+            extra_config["max_iter"] = 10
+            extra_log, _ = run_training(extra_config, task_id)
+            session["attempts"] += 1
+            return MLObservation(
+                done=False,
+                reward=0.0,
+                task_id=task_id,
+                training_log=extra_log,
+                current_config=visible_config,
+                hint=None,
+                message="Running 10 more training steps. Observe the new patterns.",
+                feedback=None,
+            )
+
+        elif action.action_type == "inspect_gradients":
+            # Return gradient statistics
+            grad_script = build_training_script(broken_config, task_id)
+            log, _ = run_training(broken_config, task_id)
+            grad_lines = [l for l in log if "grad_norm" in l]
+            if not grad_lines:
+                grad_info = ["No gradient information available for this task."]
+            else:
+                grad_info = grad_lines[:5]
+                grad_info.append(f"Total steps with gradient data: {len(grad_lines)}")
+            session["attempts"] += 1
+            return MLObservation(
+                done=False,
+                reward=0.0,
+                task_id=task_id,
+                training_log=grad_info,
+                current_config=visible_config,
+                hint=None,
+                message="Gradient inspection results. Use this to identify gradient-related bugs.",
+                feedback=None,
+            )
 
         if action.action_type == "diagnose":
             response = action.response or action.explanation or ""

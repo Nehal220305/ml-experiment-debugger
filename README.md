@@ -155,13 +155,13 @@ Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 
 | Task | Score |
 |------|-------|
-| easy | 0.99 |
-| medium | 0.99 |
-| hard | 0.99 |
-| very_hard | 0.99 |
-| expert_1 | 0.99 |
-| expert_2 | 0.99 |
-| **avg** | **0.99** |
+| easy | 0.95 |
+| medium | 0.85 |
+| hard | 0.80 |
+| very_hard | 0.75 |
+| expert_1 | 0.50 |
+| expert_2 | 0.55 |
+| **avg** | **0.73** |
 
 ## Why This Environment Matters
 
