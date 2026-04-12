@@ -18,10 +18,10 @@ app = FastAPI(
 )
 
 def clamp_reward(reward):
-    """Ensure reward is strictly between 0 and 1 (exclusive)."""
+    """Ensure reward is strictly between 0 and 1 (exclusive). Never returns None."""
     if reward is None:
-        return None
-    return max(0.01, min(0.99, round(float(reward), 4)))
+        return 0.01
+    return max(0.01, min(0.99, round(float(reward), 2)))
 
 # Lazy load environment — don't import PyTorch at startup so /health responds instantly
 _env = None
@@ -78,6 +78,7 @@ async def reset(
     obs_dict = obs.model_dump()
     reward = obs_dict.get("reward")
     reward = max(0.01, min(0.99, float(reward))) if reward is not None else 0.01
+    obs_dict["reward"] = reward  # ensure observation dict also has valid reward
     obs_dict["reward"] = reward
     return {
         "observation": obs_dict,
@@ -94,8 +95,8 @@ async def step(request: StepRequest):
     obs.reward = clamp_reward(obs.reward)
     obs_dict = obs.model_dump()
     reward = obs_dict.get("reward")
-    if reward is not None:
-        reward = max(0.01, min(0.99, float(reward)))
+    reward = max(0.01, min(0.99, float(reward))) if reward is not None else 0.01
+    obs_dict["reward"] = reward  # ensure observation dict also has valid reward
     return {
         "observation": obs_dict,
         "reward": reward,
