@@ -75,10 +75,14 @@ async def reset(
     )
     # Clamp reward on the observation object BEFORE serialization
     obs.reward = clamp_reward(obs.reward)
+    obs_dict = obs.model_dump()
+    reward = obs_dict.get("reward")
+    if reward is not None:
+        reward = max(0.01, min(0.99, float(reward)))
     return {
-        "observation": obs.model_dump(),
-        "reward": obs.reward,
-        "done": obs.done,
+        "observation": obs_dict,
+        "reward": reward,
+        "done": obs_dict.get("done", False),
     }
 
 
@@ -88,10 +92,14 @@ async def step(request: StepRequest):
     obs = await loop.run_in_executor(None, partial(get_env().step, request.action))
     # Clamp reward on the observation object BEFORE serialization
     obs.reward = clamp_reward(obs.reward)
+    obs_dict = obs.model_dump()
+    reward = obs_dict.get("reward")
+    if reward is not None:
+        reward = max(0.01, min(0.99, float(reward)))
     return {
-        "observation": obs.model_dump(),
-        "reward": obs.reward,
-        "done": obs.done,
+        "observation": obs_dict,
+        "reward": reward,
+        "done": obs_dict.get("done", False),
     }
 
 

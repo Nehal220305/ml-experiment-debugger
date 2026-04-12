@@ -53,7 +53,7 @@ def reset_env(task_id: str) -> dict:
 
 
 def step_env(action: dict) -> dict:
-    response = requests.post(f"{BASE_URL}/step", json={"action": action}, timeout=30)
+    response = requests.post(f"{BASE_URL}/step", json={"action": action}, timeout=120)
     response.raise_for_status()
     return response.json()
 
