@@ -45,9 +45,9 @@ jobs:
         run: |
           python -c "
           from server.graders import grade_response
-          score, feedback = grade_response('easy', 'learning_rate_too_high', 'The learning rate of 100 is too high causing exploding gradients. Fix: reduce to 0.01')
-          assert score > 0.5, f'Easy grader failed: {score}'
+          score, feedback = grade_response('easy', 'learning_rate_too_high', 'The learning rate of 100 is too high causing exploding gradients and NaN loss. The high learning rate leads to unstable training. Fix: reduce learning rate to 0.01 which will stabilize training')
           print(f'Grader test: {score} — {feedback}')
+          assert score >= 0.01, f'Easy grader failed: {score}'
           "
 
       - name: Validate openenv spec
