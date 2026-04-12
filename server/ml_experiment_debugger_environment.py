@@ -9,9 +9,6 @@ Randomized bug parameters per episode — agents cannot memorize answers.
 import uuid
 import random
 import time
-import subprocess
-import sys
-import textwrap
 from typing import Optional
 from openenv.core.env_server import Environment
 from models import MLAction, MLObservation, MLState
@@ -394,7 +391,7 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_c
         elif normalize_fixed:
             partial += 0.3
 
-    return min(round(partial, 2), 1.0)
+    return max(0.01, min(round(partial, 2), 0.99))
 
 
 HIDDEN_KEYS = {"loss_fn", "activation", "normalize_input", "depth"}
@@ -512,7 +509,7 @@ class MlExperimentDebuggerEnvironment(Environment):
             else:
                 return MLObservation(
                     done=True,
-                    reward=0.0,
+                    reward=0.01,
                     task_id="easy",
                     training_log=[],
                     current_config={},
@@ -538,7 +535,7 @@ class MlExperimentDebuggerEnvironment(Environment):
             session["attempts"] += 1
             return MLObservation(
                 done=False,
-                reward=0.0,
+                reward=0.01,
                 task_id=task_id,
                 training_log=extra_log,
                 current_config=visible_config,
@@ -560,7 +557,7 @@ class MlExperimentDebuggerEnvironment(Environment):
             session["attempts"] += 1
             return MLObservation(
                 done=False,
-                reward=0.0,
+                reward=0.01,
                 task_id=task_id,
                 training_log=grad_info,
                 current_config=visible_config,
@@ -590,7 +587,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                 session["bug_identified"] = True
                 return MLObservation(
                     done=False,
-                    reward=0.3,
+                    reward=0.30,
                     task_id=task_id,
                     training_log=[],
                     current_config=visible_config,
@@ -601,7 +598,7 @@ class MlExperimentDebuggerEnvironment(Environment):
                 hint = task["hint"] if session["attempts"] >= 2 else None
                 return MLObservation(
                     done=False,
-                    reward=0.0,
+                    reward=0.01,
                     task_id=task_id,
                     training_log=[],
                     current_config=visible_config,
@@ -637,12 +634,12 @@ class MlExperimentDebuggerEnvironment(Environment):
         else:
             return MLObservation(
                 done=False,
-                reward=None,
+                reward=0.01,
                 task_id=task_id,
-                training_log=log,
+                training_log=[],
                 current_config=visible_config,
                 hint=None,
-                message=f"Task '{task_id}': {task_description} Diagnose and fix the config.",
+                message=f"Unknown action_type '{action.action_type}'. Use: 'diagnose', 'request_more_steps', 'inspect_gradients'.",
             )
 
     @property
