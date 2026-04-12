@@ -59,35 +59,18 @@ def step_env(action: dict) -> dict:
 
 
 def ask_agent(observation: dict, task_id: str) -> dict:
-    training_log = "\n".join(observation.get("training_log", []))
-    current_config = json.dumps(observation.get("current_config", {}), indent=2)
+    training_log = "\n".join(observation.get("training_log", [])[:8])
+    current_config = json.dumps(observation.get("current_config", {}))
     message = observation.get("message", "")
-    hint = observation.get("hint", "")
 
-    system_prompt = """You are an expert ML engineer debugging broken training experiments.
-Analyze the training log and config carefully.
-
-Respond with a valid JSON object only:
-{
-  "action_type": "diagnose",
-  "response": "<your detailed free-text analysis: identify the bug, explain why it causes the observed symptoms, and describe the exact fix with specific values>"
-}
-
-Your response should:
-- Name the specific bug (e.g. learning rate too high, data leakage, label noise, wrong loss function, vanishing gradients, missing normalization)
-- Explain the symptoms you observed in the training log
-- Provide the exact fix with specific parameter values
-- Be at least 2-3 sentences long
-
-No markdown, no backticks, no extra text."""
+    system_prompt = 'You are an ML debugging expert. Respond with JSON only: {"action_type": "diagnose", "response": "your detailed text analysis identifying the bug and fix"}'
 
     user_prompt = f"""Task: {task_id}
 Message: {message}
-Hint: {hint if hint else 'None'}
 Training log:
 {training_log}
-Current config:
-{current_config}"""
+Config: {current_config}
+Diagnose the bug and suggest a fix. Your response field must be a plain text string."""
 
     response = client.chat.completions.create(
         model=MODEL_NAME,
@@ -96,6 +79,7 @@ Current config:
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.0,
+        max_tokens=500,
     )
 
     raw = response.choices[0].message.content.strip()
@@ -103,12 +87,19 @@ Current config:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    parsed = json.loads(raw.strip())
-    # Ensure response is a string, not a nested object
+    raw = raw.strip()
+
+    import re
+    raw = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw)
+
+    parsed = json.loads(raw)
+
+    # Ensure response is always a plain string
     if isinstance(parsed.get("response"), dict):
-        parsed["response"] = json.dumps(parsed["response"])
+        parsed["response"] = " ".join(str(v) for v in parsed["response"].values())
     elif not isinstance(parsed.get("response"), str):
         parsed["response"] = str(parsed.get("response", ""))
+
     return parsed
 
 
