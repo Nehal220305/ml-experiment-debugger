@@ -23,7 +23,7 @@ def get_broken_config(task_id: str) -> dict:
     if task_id == "easy":
         return {
             "learning_rate": random.choice([50.0, 100.0, 500.0, 1000.0]),
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "sgd",
             "fix_train_val_split": True,
             "label_noise_pct": 0.0,
@@ -33,7 +33,7 @@ def get_broken_config(task_id: str) -> dict:
     elif task_id == "medium":
         return {
             "learning_rate": 0.01,
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "adam",
             "fix_train_val_split": False,
             "label_noise_pct": 0.0,
@@ -43,7 +43,7 @@ def get_broken_config(task_id: str) -> dict:
     elif task_id == "hard":
         return {
             "learning_rate": random.choice([0.00001, 0.0001, 0.00005]),
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "adam",
             "fix_train_val_split": True,
             "label_noise_pct": random.choice([0.25, 0.30, 0.35, 0.40]),
@@ -53,7 +53,7 @@ def get_broken_config(task_id: str) -> dict:
     elif task_id == "very_hard":
         return {
             "learning_rate": 0.01,
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "adam",
             "fix_train_val_split": True,
             "label_noise_pct": 0.0,
@@ -63,7 +63,7 @@ def get_broken_config(task_id: str) -> dict:
     elif task_id == "expert_1":
         return {
             "learning_rate": 0.01,
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "sgd",
             "fix_train_val_split": True,
             "label_noise_pct": 0.0,
@@ -74,7 +74,7 @@ def get_broken_config(task_id: str) -> dict:
     elif task_id == "expert_2":
         return {
             "learning_rate": 0.01,
-            "max_iter": 20,
+            "max_iter": 10,
             "optimizer": "adam",
             "fix_train_val_split": True,
             "label_noise_pct": 0.0,
@@ -241,7 +241,7 @@ def run_training(config: dict, task_id: str) -> tuple:
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
         output = result.stdout.strip()
         stderr = result.stderr.strip()
