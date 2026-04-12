@@ -177,7 +177,7 @@ def main():
             scores[task_id] = run_task(task_id)
         except Exception as e:
             print(f"Task {task_id} failed: {e}", flush=True)
-            scores[task_id] = 0.0
+            scores[task_id] = 0.001
 
     avg = sum(scores.values()) / len(scores)
     print(f"\nFINAL AVG SCORE: {avg:.2f}", flush=True)
