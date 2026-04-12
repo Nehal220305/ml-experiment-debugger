@@ -55,8 +55,9 @@ The agent sends a JSON action with a free-text diagnosis:
 
 ### Action types
 
-- `diagnose` — agent provides free-text diagnosis and fix. Grader scores based on bug identification, fix suggestion, and explanation quality.
-
+- `diagnose` — agent provides free-text diagnosis and fix. Scored by LLM-as-judge on bug identification, fix quality, and explanation depth.
+- `request_more_steps` — agent requests 10 more training steps to observe patterns before diagnosing.
+- `inspect_gradients` — agent requests gradient norm statistics to identify gradient-related bugs.
 
 ## Observation Space
 ```json
@@ -102,11 +103,15 @@ POST /step {"action": {"action_type": "diagnose", "response": "The learning rate
 
 | Event | Reward |
 |-------|--------|
-| Correctly identifies bug (keyword match) | +0.4 |
-| Suggests valid fix (keyword match) | +0.4 |
-| Detailed explanation (>100 chars) | +0.1 |
-| Thorough analysis (>200 chars) | +0.1 |
+| Correctly identifies bug | +0.40 |
+| Suggests valid fix with specific values | +0.40 |
+| Explains why bug causes symptoms | +0.20 |
 | Score range | 0.01 – 0.99 |
+| Easy task cap | 0.95 |
+| Medium task cap | 0.85 |
+| Hard task cap | 0.80 |
+| Very Hard task cap | 0.75 |
+| Expert tasks cap | 0.55-0.60 |
 
 Reward is given at every step — not just at episode end.
 Score range: 0.0 – 1.0.
@@ -176,7 +181,7 @@ No existing OpenEnv environment covers this domain. This environment enables:
 ## Environment Details
 
 - **Framework:** OpenEnv + FastAPI + Docker
-- **Grader:** Free-text LLM response evaluated via keyword matching — rewards detailed explanations and correct fix suggestions
+- **Grader:** LLM-as-judge (Llama-3.3-70B) with keyword fallback — evaluates bug identification, fix quality, and explanation depth
 - **Training:** Real subprocess Python execution — all loss curves and metrics are genuine PyTorch output
 - **Randomized:** Bug parameters vary per episode — agents cannot memorize answers
 - **Multi-agent:** True concurrent session isolation per episode_id

@@ -86,9 +86,9 @@ reward:
   min: 0.01
   max: 0.99
   description: >
-    +0.4 for correctly identifying the bug via keyword matching.
-    +0.4 for suggesting a valid fix via keyword matching.
-    +0.2 for detailed explanation quality.
+    Scored by LLM-as-judge: +0.4 bug identification, +0.4 fix quality, +0.2 explanation depth.
+    Difficulty caps: easy=0.95, medium=0.85, hard=0.80, very_hard=0.75, expert=0.55-0.60.
+    Falls back to keyword grader if LLM unavailable.
 server:
   port: 7860
   framework: fastapi

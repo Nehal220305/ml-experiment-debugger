@@ -169,7 +169,7 @@ def get_grader():
             "explanation_quality": 0.2,
         },
         "score_range": "0.01 to 0.99",
-        "description": "Scores agent free-text diagnosis using keyword matching and explanation quality.",
+        "description": "LLM-as-judge (Llama-3.3-70B) evaluates bug identification, fix quality, and explanation depth. Falls back to keyword matching if LLM unavailable.",
     }
 
 
