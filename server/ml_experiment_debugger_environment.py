@@ -25,10 +25,10 @@ SESSION_TIMEOUT = 3600
 
 
 def _clamp_reward(reward):
-    """Ensure reward is strictly between 0 and 1 (exclusive). Platform requires (0, 1)."""
+    """Ensure reward is strictly between 0 and 1 (exclusive). Never returns None."""
     if reward is None:
-        return None
-    return max(0.01, min(0.99, round(float(reward), 4)))
+        return 0.01
+    return max(0.01, min(0.99, round(float(reward), 2)))
 
 
 def get_broken_config(task_id: str) -> dict:

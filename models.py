@@ -5,7 +5,7 @@ An agent receives a broken ML training config and must diagnose and fix it.
 
 from typing import Optional, Dict, Any, List
 from openenv.core.env_server.types import Action, Observation, State
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class MLAction(Action):
@@ -60,6 +60,18 @@ class MLObservation(Observation):
         default=None,
         description="Detailed scoring feedback from the grader"
     )
+
+    @field_validator("reward", mode="before")
+    @classmethod
+    def clamp_reward_strictly(cls, v):
+        """Ensure reward is ALWAYS strictly between 0 and 1. Never None, 0.0, or 1.0."""
+        if v is None:
+            return 0.01
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return 0.01
+        return max(0.01, min(0.99, round(f, 2)))
 
 
 class MLState(State):
