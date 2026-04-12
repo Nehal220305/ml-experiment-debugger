@@ -17,6 +17,12 @@ app = FastAPI(
     description="OpenEnv RL environment for debugging broken ML training experiments using real PyTorch execution.",
 )
 
+def clamp_reward(reward):
+    """Ensure reward is strictly between 0 and 1 (exclusive)."""
+    if reward is None:
+        return None
+    return max(0.01, min(0.99, round(float(reward), 4)))
+
 # Lazy load environment — don't import PyTorch at startup so /health responds instantly
 _env = None
 _env_lock = threading.Lock()
@@ -69,7 +75,7 @@ async def reset(
     )
     return {
         "observation": obs.model_dump(),
-        "reward": obs.reward,
+        "reward": clamp_reward(obs.reward),
         "done": obs.done,
     }
 
@@ -80,7 +86,7 @@ async def step(request: StepRequest):
     obs = await loop.run_in_executor(None, partial(get_env().step, request.action))
     return {
         "observation": obs.model_dump(),
-        "reward": obs.reward,
+        "reward": clamp_reward(obs.reward),
         "done": obs.done,
     }
 

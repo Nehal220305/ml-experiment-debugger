@@ -33,10 +33,10 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
     done_val = str(done).lower()
-    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+    print(f"[STEP] step={step} action={action} reward={reward:.4f} done={done_val} error={error_val}", flush=True)
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    rewards_str = ",".join(f"{r:.4f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
@@ -131,7 +131,7 @@ def run_task(task_id: str) -> float:
         })
 
         reward = fix_result.get("reward", 0.0) or 0.0
-        reward = max(0.001, min(0.999, float(reward)))
+        reward = max(0.01, min(0.99, float(reward)))
         done = fix_result.get("done", True)
         rewards.append(reward)
         steps_taken = 1
@@ -141,11 +141,11 @@ def run_task(task_id: str) -> float:
         log_step(step=1, action=action_str, reward=reward, done=done, error=None)
 
     except Exception as e:
-        rewards.append(0.001)
+        rewards.append(0.01)
         steps_taken = 1
-        score = 0.001
+        score = 0.01
         success = False
-        log_step(step=1, action="error", reward=0.001, done=True, error=str(e))
+        log_step(step=1, action="error", reward=0.01, done=True, error=str(e))
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
@@ -177,7 +177,7 @@ def main():
             scores[task_id] = run_task(task_id)
         except Exception as e:
             print(f"Task {task_id} failed: {e}", flush=True)
-            scores[task_id] = 0.001
+            scores[task_id] = 0.01
 
     avg = sum(scores.values()) / len(scores)
     print(f"\nFINAL AVG SCORE: {avg:.2f}", flush=True)
