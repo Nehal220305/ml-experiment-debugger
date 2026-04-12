@@ -2,25 +2,14 @@ import sys
 import os
 import asyncio
 from functools import partial
-from typing import Optional, Dict, Any
-
-# Pre-warm PyTorch at startup to avoid cold-start timeouts
+from typing import Optional
 import threading
-def _prewarm_torch():
-    try:
-        import torch
-        import torch.nn as nn
-        _ = nn.Linear(1, 1)
-    except:
-        pass
-threading.Thread(target=_prewarm_torch, daemon=True).start()
 
 sys.path.insert(0, "/app")
 sys.path.insert(0, "/app/server")
 
 from fastapi import FastAPI, Request, Query
 from pydantic import BaseModel
-from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment
 from models import MLAction
 
 app = FastAPI(
@@ -28,7 +17,22 @@ app = FastAPI(
     description="OpenEnv RL environment for debugging broken ML training experiments using real PyTorch execution.",
 )
 
-env = MlExperimentDebuggerEnvironment()
+# Lazy load environment — don't import PyTorch at startup so /health responds instantly
+_env = None
+_env_lock = threading.Lock()
+_env_ready = False
+
+def get_env():
+    global _env, _env_ready
+    with _env_lock:
+        if _env is None:
+            from server.ml_experiment_debugger_environment import MlExperimentDebuggerEnvironment
+            _env = MlExperimentDebuggerEnvironment()
+            _env_ready = True
+    return _env
+
+# Start loading env in background immediately so it's ready when requests arrive
+threading.Thread(target=get_env, daemon=True).start()
 
 
 class ResetRequest(BaseModel):
@@ -61,7 +65,7 @@ async def reset(
     loop = asyncio.get_event_loop()
     obs = await loop.run_in_executor(
         None,
-        partial(env.reset, task_id=final_task_id, seed=final_seed, episode_id=final_episode_id)
+        partial(get_env().reset, task_id=final_task_id, seed=final_seed, episode_id=final_episode_id)
     )
     return {
         "observation": obs.model_dump(),
@@ -73,7 +77,7 @@ async def reset(
 @app.post("/step")
 async def step(request: StepRequest):
     loop = asyncio.get_event_loop()
-    obs = await loop.run_in_executor(None, partial(env.step, request.action))
+    obs = await loop.run_in_executor(None, partial(get_env().step, request.action))
     return {
         "observation": obs.model_dump(),
         "reward": obs.reward,
@@ -83,12 +87,12 @@ async def step(request: StepRequest):
 
 @app.get("/state")
 def state():
-    return env.state.model_dump()
+    return get_env().state.model_dump()
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "env_ready": _env_ready}
 
 
 @app.get("/schema")
