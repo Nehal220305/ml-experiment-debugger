@@ -77,8 +77,8 @@ async def reset(
     obs.reward = clamp_reward(obs.reward)
     obs_dict = obs.model_dump()
     reward = obs_dict.get("reward")
-    if reward is not None:
-        reward = max(0.01, min(0.99, float(reward)))
+    reward = max(0.01, min(0.99, float(reward))) if reward is not None else 0.01
+    obs_dict["reward"] = reward
     return {
         "observation": obs_dict,
         "reward": reward,
