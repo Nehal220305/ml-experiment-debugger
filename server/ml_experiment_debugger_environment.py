@@ -234,38 +234,108 @@ if final_val_acc < 0.55 and final_train_acc > 0.7:
 
 
 def run_training(config: dict, task_id: str) -> tuple:
-    script = build_training_script(config, task_id)
+    """Execute training inline (no subprocess) for fast response on HF."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    import numpy as np
+    from sklearn.datasets import make_classification
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
 
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=55,
-        )
-        output = result.stdout.strip()
-        stderr = result.stderr.strip()
+    torch.manual_seed(42)
+    np.random.seed(42)
 
-        log = [line for line in output.split("\n") if line.strip()]
+    lr = config.get("learning_rate", 0.01)
+    max_iter = config.get("max_iter", 10)
+    optimizer_name = config.get("optimizer", "adam")
+    fix_split = config.get("fix_train_val_split", True)
+    noise_pct = config.get("label_noise_pct", 0.0)
+    activation = config.get("activation", "relu")
+    loss_fn = config.get("loss_fn", "bce")
+    normalize = config.get("normalize_input", True)
+    depth = config.get("depth", 1)
 
-        if stderr and "Error" in stderr:
-            log.append(f"STDERR: {stderr[:200]}")
+    X, y = make_classification(n_samples=400, n_features=10, random_state=42)
 
-        val_acc = 0.0
-        for line in reversed(log):
-            if "FINAL:" in line and "val_acc=" in line:
-                try:
-                    val_acc = float(line.split("val_acc=")[1].split()[0])
-                except:
-                    pass
-                break
+    if noise_pct > 0:
+        n_noisy = int(len(y) * noise_pct)
+        noisy_idx = np.random.choice(len(y), n_noisy, replace=False)
+        y[noisy_idx] = 1 - y[noisy_idx]
 
-        return log, val_acc
+    if normalize:
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X)
+    else:
+        X = X * 100
 
-    except subprocess.TimeoutExpired:
-        return ["ERROR: Training script timed out after 60 seconds"], 0.0
-    except Exception as e:
-        return [f"ERROR: {str(e)}"], 0.0
+    if fix_split:
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    else:
+        X_train, y_train = X, y
+        X_val, y_val = X, y
+
+    X_train_t = torch.FloatTensor(X_train)
+    y_train_t = torch.FloatTensor(y_train).unsqueeze(1)
+    X_val_t = torch.FloatTensor(X_val)
+    y_val_t = torch.FloatTensor(y_val).unsqueeze(1)
+
+    act_fn = nn.ReLU() if activation == "relu" else nn.Sigmoid()
+    layers = [nn.Linear(10, 32), act_fn]
+    for _ in range(depth - 1):
+        layers += [nn.Linear(32, 32), act_fn]
+    layers.append(nn.Linear(32, 1))
+    model = nn.Sequential(*layers)
+
+    if optimizer_name == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=lr)
+
+    criterion = nn.BCEWithLogitsLoss() if loss_fn == "bce" else nn.MSELoss()
+
+    log = [f"Training config: lr={lr}, optimizer={optimizer_name}, loss={loss_fn}, depth={depth}", "---"]
+    val_acc = 0.0
+
+    for step in range(1, max_iter + 1):
+        model.train()
+        optimizer.zero_grad()
+        outputs = model(X_train_t)
+        loss = criterion(outputs, y_train_t)
+        loss.backward()
+
+        grad_norm = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None) ** 0.5
+
+        if torch.isnan(loss) or grad_norm > 1e6:
+            log.append(f"step {step}: loss=nan (EXPLODING GRADIENTS, grad_norm={grad_norm:.2e})")
+            for i in range(step + 1, max_iter + 1):
+                log.append(f"step {i}: loss=nan")
+            break
+
+        optimizer.step()
+        loss_val = loss.item()
+
+        model.eval()
+        with torch.no_grad():
+            train_preds = (torch.sigmoid(model(X_train_t)) > 0.5).float()
+            train_acc = (train_preds == y_train_t).float().mean().item()
+            val_preds = (torch.sigmoid(model(X_val_t)) > 0.5).float()
+            val_acc = (val_preds == y_val_t).float().mean().item()
+
+        if loss_fn == "mse":
+            log.append(f"step {step}: mse_loss={loss_val:.4f} classification_acc={train_acc:.3f} (NOTE: MSE loss used for classification task)")
+        else:
+            log.append(f"step {step}: loss={loss_val:.4f} train_acc={train_acc:.3f} val_acc={val_acc:.3f} grad_norm={grad_norm:.2e}")
+
+    log.append("---")
+    log.append(f"FINAL: train_acc={train_acc:.3f} val_acc={val_acc:.3f}")
+
+    if abs(train_acc - val_acc) < 0.01 and val_acc > 0.85:
+        log.append("WARNING: train_acc == val_acc — possible data leakage")
+    if val_acc < 0.6:
+        log.append(f"WARNING: val_acc={val_acc:.3f} is suspiciously low — check data quality")
+
+    return log, float(val_acc)
 
 
 def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_config: dict = None) -> float:
