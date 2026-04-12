@@ -45,21 +45,18 @@ agents can learn to diagnose and fix them programmatically.
 
 ## Action Space
 
-The agent sends a JSON action with these fields:
+The agent sends a JSON action with a free-text diagnosis:
 ```json
 {
-  "action_type": "identify_bug | fix_config | submit_fix",
-  "bug_identified": "learning_rate_too_high | data_leakage | label_noise | wrong_loss_function | vanishing_gradients | missing_normalization",
-  "config_changes": {"learning_rate": 0.001},
-  "explanation": "optional reasoning string"
+  "action_type": "diagnose",
+  "response": "The learning rate of 50.0 is too high causing gradient explosion. The loss explodes to NaN within 5 steps. Fix: reduce learning rate to 0.01."
 }
 ```
 
 ### Action types
 
-- `identify_bug` — agent names the bug. +0.3 reward if correct.
-- `fix_config` — agent proposes config changes. Returns updated score.
-- `submit_fix` — final submission. Triggers grader, ends episode.
+- `diagnose` — agent provides free-text diagnosis and fix. Grader scores based on bug identification, fix suggestion, and explanation quality.
+
 
 ## Observation Space
 ```json
@@ -82,33 +79,22 @@ POST /reset {"task_id": "easy"}
 ```
 ```json
 {
-  "training_log": ["step 1: loss=0.745 train_acc=0.459", "step 2: loss=11.34 train_acc=0.512", "step 3: loss=nan (exploding gradients, grad_norm=2.3e+06)", "..."],
-  "current_config": {"learning_rate": 50.0, "max_iter": 20, "optimizer": "sgd"},
+  "training_log": ["Training config: lr=100.0, optimizer=sgd, loss=bce", "step 1: loss=0.745 train_acc=0.306 val_acc=0.262 grad_norm=4.30e-01", "step 2: loss=63.52 train_acc=0.641 val_acc=0.625 grad_norm=2.56e+01", "step 5: loss=nan (EXPLODING GRADIENTS, grad_norm=1.59e+06)", "..."],
+  "current_config": {"learning_rate": 100.0, "max_iter": 20, "optimizer": "sgd"},
   "message": "Task 'easy': Training loss explodes to NaN. Diagnose and fix the config."
 }
 ```
 
-### 2. Identify the bug — get +0.3 reward
+### 2. Submit free-text diagnosis — get scored
 ```bash
-POST /step {"action": {"action_type": "identify_bug", "bug_identified": "learning_rate_too_high"}}
+POST /step {"action": {"action_type": "diagnose", "response": "The learning rate of 100.0 is too high causing exploding gradients. The loss jumps from 0.745 to NaN within 5 steps and gradient norm exceeds 1e6. Fix: reduce learning rate to 0.01."}}
 ```
 ```json
 {
-  "reward": 0.3,
-  "done": false,
-  "message": "Correct! The bug is 'learning_rate_too_high'. Now fix it using 'submit_fix'."
-}
-```
-
-### 3. Submit fix — get final score
-```bash
-POST /step {"action": {"action_type": "submit_fix", "bug_identified": "learning_rate_too_high", "config_changes": {"learning_rate": 0.01}}}
-```
-```json
-{
-  "reward": 1.0,
+  "reward": 0.99,
   "done": true,
-  "message": "Score: 1.00. Episode complete."
+  "feedback": "✓ Correctly identified the bug | ✓ Suggested a valid fix | ✓ Provided detailed explanation | ✓ Thorough analysis",
+  "message": "Score: 0.99. Episode complete."
 }
 ```
 
@@ -116,10 +102,11 @@ POST /step {"action": {"action_type": "submit_fix", "bug_identified": "learning_
 
 | Event | Reward |
 |-------|--------|
-| Correctly identifies bug type | +0.3 |
-| Fix makes training converge | +0.7 |
-| Wrong bug identification | 0.0 |
-| Partial fix (some improvement) | +0.35 |
+| Correctly identifies bug (keyword match) | +0.4 |
+| Suggests valid fix (keyword match) | +0.4 |
+| Detailed explanation (>100 chars) | +0.1 |
+| Thorough analysis (>200 chars) | +0.1 |
+| Score range | 0.01 – 0.99 |
 
 Reward is given at every step — not just at episode end.
 Score range: 0.0 – 1.0.
@@ -168,13 +155,13 @@ Evaluated using `llama-3.3-70b-versatile` (Groq) with zero-shot prompting:
 
 | Task | Score |
 |------|-------|
-| easy | 1.00 |
-| medium | 1.00 |
-| hard | 0.35 |
-| very_hard | 0.30 |
-| expert_1 | 1.00 |
-| expert_2 | 1.00 |
-| **avg** | **0.78** |
+| easy | 0.99 |
+| medium | 0.99 |
+| hard | 0.99 |
+| very_hard | 0.99 |
+| expert_1 | 0.99 |
+| expert_2 | 0.99 |
+| **avg** | **0.99** |
 
 ## Why This Environment Matters
 
@@ -189,8 +176,8 @@ No existing OpenEnv environment covers this domain. This environment enables:
 ## Environment Details
 
 - **Framework:** OpenEnv + FastAPI + Docker
-- **Training:** Real PyTorch training loops — all loss curves and metrics are genuine
-- **Grader:** Runs actual PyTorch training with the agent's fix — scores are objective, not heuristic
+- **Grader:** Free-text LLM response evaluated via keyword matching — rewards detailed explanations and correct fix suggestions
+- **Training:** Real subprocess Python execution — all loss curves and metrics are genuine PyTorch output
 - **Randomized:** Bug parameters vary per episode — agents cannot memorize answers
 - **Multi-agent:** True concurrent session isolation per episode_id
 - **Session Management:** Auto-expiry of abandoned sessions after 1 hour

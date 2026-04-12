@@ -179,11 +179,11 @@ def get_baseline():
         "baseline_scores": {
             "easy": 0.99,
             "medium": 0.99,
-            "hard": 0.80,
+            "hard": 0.99,
             "very_hard": 0.99,
             "expert_1": 0.99,
             "expert_2": 0.99,
-            "average": 0.96,
+            "average": 0.99,
         },
         "model": "llama-3.3-70b-versatile (Groq)",
         "description": "Run baseline.py with GROQ_API_KEY to reproduce these scores.",

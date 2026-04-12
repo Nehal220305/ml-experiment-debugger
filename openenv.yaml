@@ -51,19 +51,11 @@ action_space:
   fields:
     action_type:
       type: string
-      description: "One of: identify_bug, fix_config, submit_fix"
-    bug_identified:
+      description: "Use 'diagnose' for free-text analysis"
+    response:
       type: string
-      description: "One of: learning_rate_too_high, data_leakage, label_noise, wrong_loss_function, vanishing_gradients, missing_normalization"
-      optional: true
-    config_changes:
-      type: object
-      description: "Key-value config fixes to apply"
-      optional: true
-    explanation:
-      type: string
-      description: "Agent's reasoning for partial credit"
-      optional: true
+      description: "Free-text diagnosis identifying the bug and suggesting a fix"
+      optional: false
 observation_space:
   type: object
   fields:
@@ -91,12 +83,12 @@ observation_space:
       type: boolean
       description: "True when episode is complete"
 reward:
-  min: 0.0
-  max: 1.0
+  min: 0.01
+  max: 0.99
   description: >
-    +0.3 for correctly identifying the bug type.
-    +0.7 for a fix that makes training converge successfully.
-    +0.35 for partial fix. Partial credit given at each step.
+    +0.4 for correctly identifying the bug via keyword matching.
+    +0.4 for suggesting a valid fix via keyword matching.
+    +0.2 for detailed explanation quality.
 server:
   port: 7860
   framework: fastapi
