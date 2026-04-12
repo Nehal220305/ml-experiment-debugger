@@ -33,12 +33,11 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
     done_val = str(done).lower()
-    print(f"[STEP] step={step} action={action} reward={reward:.3f} done={done_val} error={error_val}", flush=True)
-
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    rewards_str = ",".join(f"{r:.3f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
 def reset_env(task_id: str) -> dict:
@@ -60,20 +59,20 @@ def ask_agent(observation: dict, task_id: str) -> dict:
     hint = observation.get("hint", "")
 
     system_prompt = """You are an expert ML engineer debugging broken training experiments.
-Available bugs — use EXACTLY these strings:
-- learning_rate_too_high: learning rate causes NaN/exploding loss
-- data_leakage: validation set is same as training set
-- label_noise: training labels are corrupted
-- wrong_loss_function: wrong loss function for classification task
-- vanishing_gradients: deep network with sigmoid causes gradients to vanish
-- missing_normalization: unnormalized inputs cause unstable training
+Analyze the training log and config carefully.
 
 Respond with a valid JSON object only:
 {
-  "bug_identified": "<bug name>",
-  "config_changes": {<key-value fixes>},
-  "explanation": "<reasoning>"
+  "action_type": "diagnose",
+  "response": "<your detailed free-text analysis: identify the bug, explain why it causes the observed symptoms, and describe the exact fix with specific values>"
 }
+
+Your response should:
+- Name the specific bug (e.g. learning rate too high, data leakage, label noise, wrong loss function, vanishing gradients, missing normalization)
+- Explain the symptoms you observed in the training log
+- Provide the exact fix with specific parameter values
+- Be at least 2-3 sentences long
+
 No markdown, no backticks, no extra text."""
 
     user_prompt = f"""Task: {task_id}
@@ -121,8 +120,9 @@ def run_task(task_id: str) -> float:
             action_str = "unknown"
 
         fix_result = step_env({
-            "action_type": "submit_fix",
-            "bug_identified": action.get("bug_identified", "unknown"),
+            "action_type": action.get("action_type", "diagnose"),
+            "response": action.get("response", ""),
+            "bug_identified": action.get("bug_identified", ""),
             "config_changes": action.get("config_changes", {}),
             "explanation": action.get("explanation", ""),
         })

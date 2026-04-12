@@ -1,7 +1,7 @@
 """
 ML Experiment Debugger Environment.
-Agent receives a broken ML training config and must diagnose and fix it.
-Uses real PyTorch training loops — all loss curves and metrics are genuine.
+Agent receives a broken ML training script and must diagnose and fix it.
+Uses REAL subprocess execution — all output is genuine Python stdout/stderr.
 6 tasks: easy → expert_2 covering common real-world ML bugs.
 Randomized bug parameters per episode — agents cannot memorize answers.
 """
@@ -9,38 +9,20 @@ Randomized bug parameters per episode — agents cannot memorize answers.
 import uuid
 import random
 import time
-import numpy as np
+import subprocess
+import sys
+import textwrap
 from typing import Optional
 from openenv.core.env_server import Environment
 from models import MLAction, MLObservation, MLState
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
 SESSION_TIMEOUT = 3600
-
-
-class TinyMLP(nn.Module):
-    def __init__(self, input_dim=10, hidden_dim=32, output_dim=1):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim),
-        )
-
-    def forward(self, x):
-        return self.net(x)
 
 
 def get_broken_config(task_id: str) -> dict:
     if task_id == "easy":
         return {
-            "learning_rate": random.choice([10.0, 50.0, 100.0, 500.0]),
+            "learning_rate": random.choice([50.0, 100.0, 500.0, 1000.0]),
             "max_iter": 20,
             "optimizer": "sgd",
             "fix_train_val_split": True,
@@ -137,105 +119,153 @@ TASKS = {
 }
 
 
-def build_model(config: dict) -> nn.Module:
-    activation = config.get("activation", "relu")
-    depth = config.get("depth", 1)
-    act_fn = nn.ReLU() if activation == "relu" else nn.Sigmoid()
-    layers = [nn.Linear(10, 32), act_fn]
-    for _ in range(depth - 1):
-        layers += [nn.Linear(32, 32), act_fn]
-    layers.append(nn.Linear(32, 1))
-    return nn.Sequential(*layers)
-
-
-def run_training(config: dict, task_id: str) -> tuple:
-    torch.manual_seed(42)
-    np.random.seed(42)
-
-    X, y = make_classification(n_samples=400, n_features=10, random_state=42)
-
-    noise_pct = config.get("label_noise_pct", 0.0)
-    if noise_pct > 0:
-        n_noisy = int(len(y) * noise_pct)
-        noisy_idx = np.random.choice(len(y), n_noisy, replace=False)
-        y[noisy_idx] = 1 - y[noisy_idx]
-
-    normalize = config.get("normalize_input", True)
-    if normalize:
-        scaler = StandardScaler()
-        X = scaler.fit_transform(X)
-    else:
-        X = X * 100
-
-    if config.get("fix_train_val_split", True):
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-    else:
-        X_train, y_train = X, y
-        X_val, y_val = X, y
-
-    X_train_t = torch.FloatTensor(X_train)
-    y_train_t = torch.FloatTensor(y_train).unsqueeze(1)
-    X_val_t = torch.FloatTensor(X_val)
-    y_val_t = torch.FloatTensor(y_val).unsqueeze(1)
-
-    model = build_model(config)
+def build_training_script(config: dict, task_id: str) -> str:
     lr = config.get("learning_rate", 0.01)
-    opt_name = config.get("optimizer", "adam")
-    optimizer = optim.Adam(model.parameters(), lr=lr) if opt_name == "adam" else optim.SGD(model.parameters(), lr=lr)
-
-    loss_fn_name = config.get("loss_fn", "bce")
-    criterion = nn.BCEWithLogitsLoss() if loss_fn_name == "bce" else nn.MSELoss()
-
     max_iter = config.get("max_iter", 20)
-    log = []
-    train_acc = 0.5
+    optimizer = config.get("optimizer", "adam")
+    fix_split = config.get("fix_train_val_split", True)
+    noise_pct = config.get("label_noise_pct", 0.0)
+    activation = config.get("activation", "relu")
+    loss_fn = config.get("loss_fn", "bce")
+    normalize = config.get("normalize_input", True)
+    depth = config.get("depth", 1)
 
-    for step in range(1, max_iter + 1):
-        model.train()
-        optimizer.zero_grad()
-        outputs = model(X_train_t)
-        loss = criterion(outputs, y_train_t)
-        loss.backward()
+    act_fn = "nn.ReLU()" if activation == "relu" else "nn.Sigmoid()"
+    criterion = "nn.BCEWithLogitsLoss()" if loss_fn == "bce" else "nn.MSELoss()"
+    opt_code = f"torch.optim.Adam(model.parameters(), lr={lr})" if optimizer == "adam" else f"torch.optim.SGD(model.parameters(), lr={lr})"
 
-        grad_norm = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None) ** 0.5
+    layers = f"nn.Linear(10, 32), {act_fn}"
+    for _ in range(depth - 1):
+        layers += f", nn.Linear(32, 32), {act_fn}"
+    layers += ", nn.Linear(32, 1)"
 
-        if torch.isnan(loss) or grad_norm > 1e6:
-            log.append(f"step {step}: loss=nan (exploding gradients, grad_norm={grad_norm:.1e})")
-            for i in range(step + 1, max_iter + 1):
-                log.append(f"step {i}: loss=nan")
-            return log, 0.0
+    normalize_code = "X = scaler.fit_transform(X)" if normalize else "X = X * 100  # WARNING: unnormalized features"
+    scaler_import = "from sklearn.preprocessing import StandardScaler\nscaler = StandardScaler()" if normalize else ""
 
-        optimizer.step()
-        loss_val = loss.item()
+    split_code = "X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)" if fix_split else "X_train, y_train = X, y  # WARNING: using full dataset for train and val\nX_val, y_val = X, y"
 
-        model.eval()
-        with torch.no_grad():
-            train_preds = (torch.sigmoid(model(X_train_t)) > 0.5).float()
-            train_acc = (train_preds == y_train_t).float().mean().item()
+    noise_code = ""
+    if noise_pct > 0:
+        noise_code = f"""
+n_noisy = int(len(y) * {noise_pct})
+noisy_idx = np.random.choice(len(y), n_noisy, replace=False)
+y[noisy_idx] = 1 - y[noisy_idx]
+# noise injected silently — agent must discover this"""
 
-        if task_id == "expert_1":
-            log.append(f"step {step}: loss={loss_val:.4f} grad_norm={grad_norm:.2e}")
-        elif task_id == "expert_2":
-            log.append(f"step {step}: loss={loss_val:.4f} (oscillating)")
-        else:
-            log.append(f"step {step}: loss={loss_val:.4f} train_acc={train_acc:.3f}")
+    script = f"""
+import torch
+import torch.nn as nn
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+{scaler_import}
+import warnings
+warnings.filterwarnings('ignore')
+
+torch.manual_seed(42)
+np.random.seed(42)
+
+X, y = make_classification(n_samples=400, n_features=10, random_state=42)
+{noise_code}
+
+{normalize_code}
+
+{split_code}
+
+X_train_t = torch.FloatTensor(X_train)
+y_train_t = torch.FloatTensor(y_train).unsqueeze(1)
+X_val_t = torch.FloatTensor(X_val)
+y_val_t = torch.FloatTensor(y_val).unsqueeze(1)
+
+model = nn.Sequential({layers})
+optimizer = {opt_code}
+criterion = {criterion}
+
+print("Training config: lr={lr}, optimizer={optimizer}, loss={loss_fn}, depth={depth}")
+print("---")
+
+for step in range(1, {max_iter} + 1):
+    model.train()
+    optimizer.zero_grad()
+    outputs = model(X_train_t)
+    loss = criterion(outputs, y_train_t)
+    loss.backward()
+
+    grad_norm = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None) ** 0.5
+
+    if torch.isnan(loss) or grad_norm > 1e6:
+        print(f"step {{step}}: loss=nan (EXPLODING GRADIENTS, grad_norm={{grad_norm:.2e}})")
+        for i in range(step + 1, {max_iter} + 1):
+            print(f"step {{i}}: loss=nan")
+        break
+
+    optimizer.step()
+    loss_val = loss.item()
 
     model.eval()
     with torch.no_grad():
-        val_outputs = model(X_val_t)
-        val_preds = (torch.sigmoid(val_outputs) > 0.5).float()
-        val_acc = (val_preds == y_val_t).float().mean().item()
+        train_preds = (torch.sigmoid(model(X_train_t)) > 0.5).float()
+        train_acc = (train_preds == y_train_t).float().mean().item()
+        val_preds_t = (torch.sigmoid(model(X_val_t)) > 0.5).float()
+        val_acc = (val_preds_t == y_val_t).float().mean().item()
 
-    if noise_pct > 0.1:
-        log.append(f"reported_metric: train_acc={train_acc:.3f} (model appears healthy)")
-        log.append(f"final val_acc={val_acc:.3f} (WARNING: suspiciously low — check label quality)")
-    elif loss_fn_name == "mse":
-        log.append(f"final loss={loss_val:.4f} (converged)")
-        log.append(f"final val_acc=0.523 (WARNING: despite converged loss, near-random performance)")
+    if "{loss_fn}" == "mse":
+        print(f"step {{step}}: mse_loss={{loss_val:.4f}} classification_acc={{train_acc:.3f}} (NOTE: MSE loss used for classification task)")
     else:
-        log.append(f"final val_acc={val_acc:.3f}")
+        print(f"step {{step}}: loss={{loss_val:.4f}} train_acc={{train_acc:.3f}} val_acc={{val_acc:.3f}} grad_norm={{grad_norm:.2e}}")
 
-    return log, float(val_acc)
+model.eval()
+with torch.no_grad():
+    val_preds_f = (torch.sigmoid(model(X_val_t)) > 0.5).float()
+    final_val_acc = (val_preds_f == y_val_t).float().mean().item()
+    train_preds_f = (torch.sigmoid(model(X_train_t)) > 0.5).float()
+    final_train_acc = (train_preds_f == y_train_t).float().mean().item()
+
+print("---")
+print(f"FINAL: train_acc={{final_train_acc:.3f}} val_acc={{final_val_acc:.3f}}")
+if abs(final_train_acc - final_val_acc) < 0.01 and final_val_acc > 0.85:
+    print("WARNING: train_acc == val_acc — possible data leakage")
+if final_val_acc < 0.6:
+    print(f"WARNING: val_acc={{final_val_acc:.3f}} is suspiciously low — check data quality")
+if final_val_acc < 0.55 and final_train_acc > 0.7:
+    print("WARNING: large train/val gap — check label integrity")
+"""
+    return script
+
+
+def run_training(config: dict, task_id: str) -> tuple:
+    script = build_training_script(config, task_id)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = result.stdout.strip()
+        stderr = result.stderr.strip()
+
+        log = [line for line in output.split("\n") if line.strip()]
+
+        if stderr and "Error" in stderr:
+            log.append(f"STDERR: {stderr[:200]}")
+
+        val_acc = 0.0
+        for line in reversed(log):
+            if "FINAL:" in line and "val_acc=" in line:
+                try:
+                    val_acc = float(line.split("val_acc=")[1].split()[0])
+                except:
+                    pass
+                break
+
+        return log, val_acc
+
+    except subprocess.TimeoutExpired:
+        return ["ERROR: Training script timed out after 60 seconds"], 0.0
+    except Exception as e:
+        return [f"ERROR: {str(e)}"], 0.0
 
 
 def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_config: dict = None) -> float:
@@ -247,13 +277,14 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_c
         base_config.update(config_changes)
 
     log, score = run_training(base_config, task_id)
+    log_str = " ".join(log)
     partial = 0.0
 
     if bug_identified:
         partial += 0.3
 
     if task_id == "easy":
-        if "nan" not in " ".join(log):
+        if "nan" not in log_str:
             partial += 0.7
 
     elif task_id == "medium":
@@ -293,6 +324,127 @@ def grade_fix(task_id: str, config_changes: dict, bug_identified: bool, broken_c
             partial += 0.3
 
     return min(round(partial, 2), 1.0)
+
+
+def grade_free_text(task_id: str, response: str, broken_config: dict) -> tuple:
+    """
+    Grade a free-text response from the agent.
+    Returns (score, feedback) tuple.
+    """
+    if not response:
+        return 0.01, "No response provided."
+
+    response_lower = response.lower()
+    score = 0.0
+    feedback_parts = []
+
+    task = TASKS[task_id]
+    bug = task["bug"]
+
+    # --- Bug identification keywords ---
+    bug_keywords = {
+        "learning_rate_too_high": [
+            "learning rate", "lr", "exploding gradient", "nan", "too high",
+            "gradient explosion", "step size"
+        ],
+        "data_leakage": [
+            "data leakage", "leakage", "validation set", "train val split",
+            "same data", "identical accuracy", "overfitting"
+        ],
+        "label_noise": [
+            "label noise", "noisy label", "corrupted label", "label corruption",
+            "wrong label", "mislabeled", "flipped label", "corrupted",
+            "noise", "poor real-world", "label quality"
+        ],
+        "wrong_loss_function": [
+            "loss function", "mse", "mean squared error", "cross entropy",
+            "bce", "binary cross", "classification loss", "wrong loss",
+            "incorrect loss", "mean square", "regression loss",
+            "wrong loss function", "inappropriate loss", "loss is wrong",
+            "loss is incorrect", "loss is not appropriate", "classification task",
+            "for classification", "not suitable"
+        ],
+        "vanishing_gradients": [
+            "vanishing gradient", "sigmoid", "gradient vanish", "deep network",
+            "gradient flow", "activation function", "relu", "barely moves",
+            "stalls", "gradient norm", "dying"
+        ],
+        "missing_normalization": [
+            "lack of feature", "lack of normalization", "feature normalization",
+            "without normalization", "no normalization",
+            "normalize", "standardize", "standard scaler", "min max",
+            "feature scaling", "preprocess", "normalization",
+            "scale the", "scaling the", "apply", "scaler",
+            "normalize the input", "normalize input", "feature normalize",
+            "input normalization", "standardization"
+        ],
+    }
+
+    # --- Fix keywords ---
+    fix_keywords = {
+        "learning_rate_too_high": [
+            "reduce", "lower", "decrease", "0.01", "0.001", "smaller", "less"
+        ],
+        "data_leakage": [
+            "separate", "split", "held-out", "train test split", "fix split",
+            "independent validation"
+        ],
+        "label_noise": [
+            "clean", "remove noise", "fix labels", "label_noise_pct",
+            "correct labels", "0.0"
+        ],
+        "wrong_loss_function": [
+            "cross-entropy loss", "to cross", "loss to cross", "change to cross",
+            "cross entropy", "bce", "binary cross", "log loss",
+            "classification loss", "change loss"
+        ],
+        "vanishing_gradients": [
+            "relu", "batch norm", "residual", "skip connection",
+            "change activation", "gradient clipping"
+        ],
+        "missing_normalization": [
+            "standardscaler", "minmaxscaler", "add normalization", 
+            "normalization layer", "scale the input", "scale input",
+            "zero mean", "unit variance", "mean of 0"
+            "normalize", "standardize", "standard scaler", "min max",
+            "feature scaling", "preprocess"
+        ],
+    }
+
+    # Score bug identification (0.4)
+    keywords = bug_keywords.get(bug, [])
+    matched_bug_keywords = [k for k in keywords if k in response_lower]
+    if len(matched_bug_keywords) >= 3:
+        score += 0.4
+        feedback_parts.append(f"✓ Correctly identified the bug ({bug})")
+    elif len(matched_bug_keywords) >= 2:
+        score += 0.2
+        feedback_parts.append(f"~ Partially identified the bug")
+    else:
+        feedback_parts.append(f"✗ Did not identify the bug ({bug})")
+
+    # Score fix suggestion (0.4)
+    fix_kws = fix_keywords.get(bug, [])
+    matched_fix_keywords = [k for k in fix_kws if k in response_lower]
+    if len(matched_fix_keywords) >= 1:
+        score += 0.4
+        feedback_parts.append(f"✓ Suggested a valid fix")
+    else:
+        feedback_parts.append(f"✗ Did not suggest a valid fix")
+
+    # Score explanation quality (0.2)
+    if len(response) > 100:
+        score += 0.1
+        feedback_parts.append("✓ Provided detailed explanation")
+    if len(response) > 200:
+        score += 0.1
+        feedback_parts.append("✓ Thorough analysis")
+
+    # Clamp to valid range
+    score = max(0.01, min(0.99, round(score, 2)))
+    feedback = " | ".join(feedback_parts)
+
+    return score, feedback
 
 
 HIDDEN_KEYS = {"loss_fn", "activation", "normalize_input", "depth"}
@@ -401,7 +553,22 @@ class MlExperimentDebuggerEnvironment(Environment):
         broken_config = session.get("broken_config", get_broken_config(task_id))
         visible_config = {k: v for k, v in broken_config.items() if k not in HIDDEN_KEYS}
 
-        if action.action_type == "identify_bug":
+        if action.action_type == "diagnose":
+            response = action.response or action.explanation or ""
+            broken_config = session.get("broken_config", get_broken_config(task_id))
+            score, feedback = grade_free_text(task_id, response, broken_config)
+            return MLObservation(
+                done=True,
+                reward=score,
+                task_id=task_id,
+                training_log=[],
+                current_config=visible_config,
+                hint=None,
+                message=f"Score: {score:.2f}. Episode complete.",
+                feedback=feedback,
+            )
+
+        elif action.action_type == "identify_bug":
             correct = (action.bug_identified == task["bug"])
             if correct:
                 session["bug_identified"] = True

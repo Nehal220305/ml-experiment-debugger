@@ -1,6 +1,6 @@
 """
 Baseline inference script for the ML Experiment Debugger Environment.
-Uses Groq API to run an LLM agent against all 3 tasks.
+Uses Groq API to run an LLM agent against all tasks.
 
 Usage:
     export GROQ_API_KEY=your_key_here
@@ -8,6 +8,7 @@ Usage:
 """
 
 import os
+import re
 import json
 import argparse
 import requests
@@ -53,25 +54,21 @@ def ask_agent(observation: dict, task_id: str) -> dict:
     hint = observation.get("hint", "")
 
     system_prompt = """You are an expert ML engineer debugging broken training experiments.
-You will receive a training log and config showing a broken ML experiment.
-Your job is to identify the bug and fix the config.
+Analyze the training log and config carefully.
 
-Available bugs — use EXACTLY these strings:
-- learning_rate_too_high: learning rate causes NaN loss
-- data_leakage: validation set is same as training set
-- label_noise: training labels are corrupted
-- wrong_loss_function: wrong loss function for classification
-- vanishing_gradients: deep network with sigmoid causes gradients to vanish
-- missing_normalization: unnormalized inputs cause unstable training
-
-You must respond with a valid JSON object with these exact fields:
+Respond with a valid JSON object only:
 {
-  "bug_identified": "<one of the three bug names above>",
-  "config_changes": {<key-value fixes to apply to the config>},
-  "explanation": "<your reasoning>"
+  "action_type": "diagnose",
+  "response": "<your detailed free-text analysis: identify the bug, explain why it causes the observed symptoms, and describe the exact fix with specific values>"
 }
 
-Only respond with the JSON object. No markdown, no backticks, no extra text."""
+Your response should:
+- Name the specific bug (learning rate too high, data leakage, label noise, wrong loss function, vanishing gradients, missing normalization)
+- Explain the symptoms you observed in the training log
+- Provide the exact fix with specific parameter values
+- Be at least 2-3 sentences long
+
+No markdown, no backticks, no extra text."""
 
     user_prompt = f"""Task: {task_id}
 Message: {message}
@@ -102,6 +99,9 @@ Diagnose the bug and provide the fix as JSON."""
             raw = raw[4:]
     raw = raw.strip()
 
+    # Remove control characters that break JSON parsing
+    raw = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw)
+
     return json.loads(raw)
 
 
@@ -122,20 +122,19 @@ def run_task(task_id: str) -> float:
     try:
         action = ask_agent(observation, task_id)
         print(f"\nAgent action:")
-        print(f"  Bug identified: {action.get('bug_identified')}")
-        print(f"  Config changes: {action.get('config_changes')}")
-        print(f"  Explanation: {action.get('explanation', '')[:120]}...")
+        print(f"  Response: {action.get('response', '')[:150]}...")
+        print(f"  Full response: {action.get('response', '')}")
     except Exception as e:
-        print(f"Agent failed to parse response: {e}")
+        print(f"Agent failed to parse response: {e}")  
         action = {
-            "bug_identified": "unknown",
-            "config_changes": {},
-            "explanation": "Failed to parse",
+            "action_type": "diagnose",
+            "response": "Failed to parse agent response",
         }
 
     fix_result = step_env({
-        "action_type": "submit_fix",
-        "bug_identified": action.get("bug_identified", "unknown"),
+        "action_type": action.get("action_type", "diagnose"),
+        "response": action.get("response", ""),
+        "bug_identified": action.get("bug_identified", ""),
         "config_changes": action.get("config_changes", {}),
         "explanation": action.get("explanation", ""),
     })
@@ -143,6 +142,7 @@ def run_task(task_id: str) -> float:
     final_reward = fix_result.get("reward", 0.0) or 0.0
     fix_obs = fix_result.get("observation", {})
     print(f"Fix result: {fix_obs.get('message', '')}")
+    print(f"Feedback: {fix_obs.get('feedback', '')}")
     print(f"Final score: {final_reward:.2f}")
 
     return float(final_reward)

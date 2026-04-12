@@ -1,4 +1,9 @@
+spec_version: 1
 name: ml_experiment_debugger
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
 version: "2.0.0"
 description: >
   An RL environment where an AI agent debugs broken ML training experiments.

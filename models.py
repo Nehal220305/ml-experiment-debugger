@@ -9,11 +9,15 @@ from pydantic import Field
 
 
 class MLAction(Action):
-    """What the agent sends — identify the bug and/or propose a fix."""
+    """What the agent sends — free-text diagnosis OR structured fix."""
 
     action_type: str = Field(
         ...,
-        description="One of: 'identify_bug', 'fix_config', 'submit_fix'"
+        description="One of: 'diagnose' (free-text), 'submit_fix' (structured)"
+    )
+    response: Optional[str] = Field(
+        default=None,
+        description="Free-text diagnosis and fix explanation. Used with action_type='diagnose'"
     )
     bug_identified: Optional[str] = Field(
         default=None,
@@ -34,11 +38,11 @@ class MLObservation(Observation):
 
     task_id: str = Field(
         default="easy",
-        description="Active task: 'easy', 'medium', or 'hard'"
+        description="Active task: easy, medium, hard, very_hard, expert_1, expert_2"
     )
     training_log: List[str] = Field(
         default_factory=list,
-        description="Training output e.g. ['step 1: loss=2.31', 'step 2: loss=nan']"
+        description="Real Python training output showing loss, accuracy, gradient norms"
     )
     current_config: Dict[str, Any] = Field(
         default_factory=dict,
@@ -51,6 +55,10 @@ class MLObservation(Observation):
     message: str = Field(
         default="",
         description="Feedback message after each action"
+    )
+    feedback: Optional[str] = Field(
+        default=None,
+        description="Detailed scoring feedback from the grader"
     )
 
 
