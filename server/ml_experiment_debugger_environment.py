@@ -6,105 +6,6 @@ Uses REAL subprocess execution — all output is genuine Python stdout/stderr.
 Randomized bug parameters per episode — agents cannot memorize answers.
 """
 
-# Pre-computed training logs for instant reset response
-PRECOMPUTED_LOGS = {
-    "easy_50": ["Training config: lr=50.0, optimizer=sgd, loss=bce, depth=1", "---",
-        "step 1: loss=0.7451 train_acc=0.459 val_acc=0.438 grad_norm=4.30e-01",
-        "step 2: loss=11.3466 train_acc=0.512 val_acc=0.538 grad_norm=1.03e+01",
-        "step 3: loss=11015.4922 train_acc=0.506 val_acc=0.475 grad_norm=1.82e+02",
-        "step 4: loss=6185319.0000 train_acc=0.128 val_acc=0.150 grad_norm=3.67e+03",
-        "step 5: loss=nan (EXPLODING GRADIENTS, grad_norm=1.59e+06)",
-        "step 6: loss=nan", "step 7: loss=nan", "step 8: loss=nan",
-        "step 9: loss=nan", "step 10: loss=nan",
-        "---", "FINAL: train_acc=0.128 val_acc=0.150",
-        "WARNING: val_acc=0.150 is suspiciously low — check data quality"],
-    "easy_100": ["Training config: lr=100.0, optimizer=sgd, loss=bce, depth=1", "---",
-        "step 1: loss=0.7451 train_acc=0.306 val_acc=0.262 grad_norm=4.30e-01",
-        "step 2: loss=63.5247 train_acc=0.641 val_acc=0.625 grad_norm=2.56e+01",
-        "step 3: loss=66033.5781 train_acc=0.506 val_acc=0.475 grad_norm=7.98e+02",
-        "step 4: loss=nan (EXPLODING GRADIENTS, grad_norm=3.26e+04)",
-        "step 5: loss=nan", "step 6: loss=nan", "step 7: loss=nan",
-        "step 8: loss=nan", "step 9: loss=nan", "step 10: loss=nan",
-        "---", "FINAL: train_acc=0.328 val_acc=0.438"],
-    "easy_500": ["Training config: lr=500.0, optimizer=sgd, loss=bce, depth=1", "---",
-        "step 1: loss=0.7451 train_acc=0.237 val_acc=0.213 grad_norm=4.30e-01",
-        "step 2: loss=2081.3208 train_acc=0.609 val_acc=0.650 grad_norm=1.41e+02",
-        "step 3: loss=nan (EXPLODING GRADIENTS, grad_norm=2.04e+04)",
-        "step 4: loss=nan", "step 5: loss=nan", "step 6: loss=nan",
-        "step 7: loss=nan", "step 8: loss=nan", "step 9: loss=nan", "step 10: loss=nan",
-        "---", "FINAL: train_acc=0.237 val_acc=0.213"],
-    "easy_1000": ["Training config: lr=1000.0, optimizer=sgd, loss=bce, depth=1", "---",
-        "step 1: loss=0.7451 train_acc=0.228 val_acc=0.213 grad_norm=4.30e-01",
-        "step 2: loss=8595.4062 train_acc=0.606 val_acc=0.663 grad_norm=2.85e+02",
-        "step 3: loss=nan (EXPLODING GRADIENTS, grad_norm=8.26e+04)",
-        "step 4: loss=nan", "step 5: loss=nan", "step 6: loss=nan",
-        "step 7: loss=nan", "step 8: loss=nan", "step 9: loss=nan", "step 10: loss=nan",
-        "---", "FINAL: train_acc=0.228 val_acc=0.213"],
-    "medium": ["Training config: lr=0.01, optimizer=adam, loss=bce, depth=1", "---",
-        "step 1: loss=0.7432 train_acc=0.475 val_acc=0.475 grad_norm=4.17e-01",
-        "step 2: loss=0.7075 train_acc=0.600 val_acc=0.600 grad_norm=3.80e-01",
-        "step 3: loss=0.6754 train_acc=0.700 val_acc=0.700 grad_norm=3.53e-01",
-        "step 4: loss=0.6461 train_acc=0.750 val_acc=0.750 grad_norm=3.12e-01",
-        "step 5: loss=0.6194 train_acc=0.775 val_acc=0.775 grad_norm=2.87e-01",
-        "step 6: loss=0.5950 train_acc=0.800 val_acc=0.800 grad_norm=2.65e-01",
-        "step 7: loss=0.5728 train_acc=0.813 val_acc=0.813 grad_norm=2.45e-01",
-        "step 8: loss=0.5524 train_acc=0.825 val_acc=0.825 grad_norm=2.28e-01",
-        "step 9: loss=0.5336 train_acc=0.838 val_acc=0.838 grad_norm=2.12e-01",
-        "step 10: loss=0.5163 train_acc=0.850 val_acc=0.850 grad_norm=1.98e-01",
-        "---", "FINAL: train_acc=0.850 val_acc=0.850",
-        "WARNING: train_acc == val_acc — possible data leakage"],
-    "hard_25": ["Training config: lr=1e-05, optimizer=adam, loss=bce, depth=1", "---",
-        "step 1: loss=0.7260 train_acc=0.434 val_acc=0.637 grad_norm=3.37e-01",
-        "step 2: loss=0.7260 train_acc=0.434 val_acc=0.637 grad_norm=3.37e-01",
-        "step 3: loss=0.7259 train_acc=0.434 val_acc=0.637 grad_norm=3.36e-01",
-        "step 4: loss=0.7259 train_acc=0.434 val_acc=0.637 grad_norm=3.36e-01",
-        "step 5: loss=0.7258 train_acc=0.434 val_acc=0.637 grad_norm=3.35e-01",
-        "step 6: loss=0.7258 train_acc=0.434 val_acc=0.637 grad_norm=3.35e-01",
-        "step 7: loss=0.7257 train_acc=0.434 val_acc=0.637 grad_norm=3.34e-01",
-        "step 8: loss=0.7257 train_acc=0.434 val_acc=0.637 grad_norm=3.34e-01",
-        "step 9: loss=0.7256 train_acc=0.434 val_acc=0.637 grad_norm=3.33e-01",
-        "step 10: loss=0.7256 train_acc=0.434 val_acc=0.637 grad_norm=3.33e-01",
-        "---", "FINAL: train_acc=0.434 val_acc=0.637",
-        "WARNING: val_acc=0.637 is suspiciously low — check data quality"],
-    "very_hard": ["Training config: lr=0.01, optimizer=adam, loss=mse, depth=1", "---",
-        "step 1: mse_loss=0.7106 classification_acc=0.419 (NOTE: MSE loss used for classification task)",
-        "step 2: mse_loss=0.5593 classification_acc=0.463 (NOTE: MSE loss used for classification task)",
-        "step 3: mse_loss=0.4342 classification_acc=0.512 (NOTE: MSE loss used for classification task)",
-        "step 4: mse_loss=0.3312 classification_acc=0.519 (NOTE: MSE loss used for classification task)",
-        "step 5: mse_loss=0.2498 classification_acc=0.525 (NOTE: MSE loss used for classification task)",
-        "step 6: mse_loss=0.1887 classification_acc=0.528 (NOTE: MSE loss used for classification task)",
-        "step 7: mse_loss=0.1429 classification_acc=0.531 (NOTE: MSE loss used for classification task)",
-        "step 8: mse_loss=0.1085 classification_acc=0.525 (NOTE: MSE loss used for classification task)",
-        "step 9: mse_loss=0.0826 classification_acc=0.519 (NOTE: MSE loss used for classification task)",
-        "step 10: mse_loss=0.0631 classification_acc=0.512 (NOTE: MSE loss used for classification task)",
-        "---", "FINAL: train_acc=0.512 val_acc=0.512"],
-    "expert_1_4": ["Training config: lr=0.01, optimizer=sgd, loss=bce, depth=4", "---",
-        "step 1: loss=0.7014 train_acc=0.506 val_acc=0.475 grad_norm=1.96e-01",
-        "step 2: loss=0.7010 train_acc=0.506 val_acc=0.475 grad_norm=1.91e-01",
-        "step 3: loss=0.7006 train_acc=0.506 val_acc=0.475 grad_norm=1.87e-01",
-        "step 4: loss=0.7003 train_acc=0.506 val_acc=0.475 grad_norm=1.83e-01",
-        "step 5: loss=0.7000 train_acc=0.506 val_acc=0.475 grad_norm=1.78e-01",
-        "step 6: loss=0.6996 train_acc=0.506 val_acc=0.475 grad_norm=1.74e-01",
-        "step 7: loss=0.6993 train_acc=0.506 val_acc=0.475 grad_norm=1.70e-01",
-        "step 8: loss=0.6991 train_acc=0.506 val_acc=0.475 grad_norm=1.67e-01",
-        "step 9: loss=0.6988 train_acc=0.506 val_acc=0.475 grad_norm=1.63e-01",
-        "step 10: loss=0.6985 train_acc=0.506 val_acc=0.475 grad_norm=1.59e-01",
-        "---", "FINAL: train_acc=0.506 val_acc=0.475",
-        "WARNING: val_acc=0.475 is suspiciously low — check data quality"],
-    "expert_2": ["Training config: lr=0.01, optimizer=adam, loss=bce, depth=1", "---",
-        "step 1: loss=16.6073 train_acc=0.463 val_acc=0.475 grad_norm=8.44e+01",
-        "step 2: loss=9.6769 train_acc=0.628 val_acc=0.575 grad_norm=6.78e+01",
-        "step 3: loss=4.6226 train_acc=0.784 val_acc=0.762 grad_norm=4.25e+01",
-        "step 4: loss=8.3301 train_acc=0.reconstruction val_acc=0.612 grad_norm=5.12e+01",
-        "step 5: loss=3.1205 train_acc=0.669 val_acc=0.625 grad_norm=3.87e+01",
-        "step 6: loss=5.8842 train_acc=0.725 val_acc=0.675 grad_norm=4.44e+01",
-        "step 7: loss=2.4419 train_acc=0.697 val_acc=0.650 grad_norm=3.21e+01",
-        "step 8: loss=4.1205 train_acc=0.713 val_acc=0.662 grad_norm=3.98e+01",
-        "step 9: loss=1.9876 train_acc=0.706 val_acc=0.656 grad_norm=2.87e+01",
-        "step 10: loss=3.2145 train_acc=0.719 val_acc=0.668 grad_norm=3.45e+01",
-        "---", "FINAL: train_acc=0.719 val_acc=0.668"],
-}
-
 import uuid
 import random
 import time
@@ -521,24 +422,6 @@ def _get_random_scenario(task_id: str) -> dict:
         return random.choice(task_scenarios)
     return {}
 
-def _get_precomputed_log(task_id: str, config: dict) -> list:
-    """Return precomputed log for instant response. PyTorch runs only on grading."""
-    if task_id == "easy":
-        lr = config.get("learning_rate", 100.0)
-        key = f"easy_{int(lr)}"
-        return PRECOMPUTED_LOGS.get(key, PRECOMPUTED_LOGS["easy_100"])
-    elif task_id == "medium":
-        return PRECOMPUTED_LOGS["medium"]
-    elif task_id == "hard":
-        return PRECOMPUTED_LOGS["hard_25"]
-    elif task_id == "very_hard":
-        return PRECOMPUTED_LOGS["very_hard"]
-    elif task_id == "expert_1":
-        return PRECOMPUTED_LOGS["expert_1_4"]
-    elif task_id == "expert_2":
-        return PRECOMPUTED_LOGS["expert_2"]
-    return ["No training log available"]
-
 
 
 class MlExperimentDebuggerEnvironment(Environment):
@@ -605,7 +488,7 @@ class MlExperimentDebuggerEnvironment(Environment):
         }
 
         task = TASKS[task_id]
-        log = _get_precomputed_log(task_id, broken_config)
+        log, _ = run_training(broken_config, task_id)
         visible_config = {k: v for k, v in broken_config.items() if k not in HIDDEN_KEYS}
 
         return MLObservation(

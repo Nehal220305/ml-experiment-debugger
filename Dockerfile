@@ -29,7 +29,7 @@ RUN uv pip install --system --no-cache \
 COPY . .
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:7860/health || exit 1
 
 EXPOSE 7860

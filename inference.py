@@ -5,7 +5,7 @@ MANDATORY env variables:
     MODEL_NAME     The model identifier
     HF_TOKEN       Your Hugging Face / API key
 """
-
+import time
 import os
 import json
 import argparse
@@ -41,9 +41,15 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
 
 
 def reset_env(task_id: str) -> dict:
-    response = requests.post(f"{BASE_URL}/reset", json={"task_id": task_id}, timeout=30)
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(3):
+        try:
+            response = requests.post(f"{BASE_URL}/reset", json={"task_id": task_id}, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            if attempt == 2:
+                raise
+            time.sleep(5)
 
 
 def step_env(action: dict) -> dict:
